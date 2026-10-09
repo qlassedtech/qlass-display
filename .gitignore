@@ -1,0 +1,9 @@
+node_modules/
+data/uploads/*
+!data/uploads/.gitkeep
+data/media.json
+data/settings.json
+.env
+data/meta/
+data/auth.json
+.claude/scheduled_tasks.lock

@@ -1,0 +1,17 @@
+{
+  "name": "qlass-display",
+  "version": "1.0.0",
+  "description": "Team upload portal + TV signage player for display.qlass.in",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "express": "^5.2.1",
+    "multer": "^2.4.0"
+  }
+}

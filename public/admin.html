@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qlass Display · Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+  :root { --bg:#F4F5FB; --card:#fff; --line:#E1E3F0; --text:#0D0B6E; --muted:#5A5F8F; --accent:#0D0B6E; --accent2:#1717C1; --gold:#F5B83D; --danger:#B4232F; --ok:#146C3A; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:'Manrope',system-ui,sans-serif; font-size:15px; }
+  a { color:var(--accent2); } a:hover { color:var(--accent); }
+  header { background:#fff; }
+  header .brand { display:flex; align-items:center; gap:14px; }
+  header .brand img { height:32px; display:block; }
+  header .brand i { width:1px; height:26px; background:var(--line); }
+  h2.title { font-family:'DM Serif Display',serif; font-weight:400; font-size:34px; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0 0 20px; }
+  .tabs { display:inline-flex; background:#E6E8F4; border-radius:12px; padding:4px; gap:4px; margin-bottom:20px; }
+  .tabs button { background:transparent; color:var(--muted); font-weight:700; border-radius:9px; }
+  .tabs button.on { background:#fff; color:var(--text); box-shadow:0 1px 3px rgba(13,11,110,.15); }
+  .ach-row { display:flex; align-items:center; gap:14px; padding:12px 4px; border-top:1px solid #EEF0F7; }
+  .ach-row .dot { width:42px; height:42px; flex:none; border-radius:50%; background:var(--accent2); color:#fff; display:grid; place-items:center; font-family:'DM Serif Display',serif; font-size:17px; background-size:cover; background-position:center; }
+  .ach-row .who { flex:1; min-width:0; } .ach-row .who b { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ach-row .who small { color:var(--muted); }
+  .ach-row .pct { font-family:'DM Serif Display',serif; font-size:24px; }
+  .ach-row.off { opacity:.5; }
+  .err { color:var(--danger); } .okc { color:var(--ok); }
+  header { display:flex; align-items:center; justify-content:space-between; padding:16px 24px; border-bottom:1px solid var(--line); gap:12px; flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0; font-weight:600; }
+  header .links { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  main { max-width:1200px; margin:0 auto; padding:24px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:20px; }
+  button, .btn { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:9px 14px; font-size:14px; cursor:pointer; text-decoration:none; display:inline-block; white-space:nowrap; }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--text); }
+  button.danger { background:transparent; border:1px solid var(--danger); color:var(--danger); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  input[type=text], input[type=password], input[type=number], input[type=url], select { background:#fff; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:14px; }
+  input[type=number] { width:80px; }
+  label { color:var(--muted); font-size:13px; }
+  .drop { border:2px dashed var(--line); border-radius:12px; padding:36px; text-align:center; color:var(--muted); transition:.15s; cursor:pointer; }
+  .drop.over { border-color:var(--accent2); color:var(--text); background:#EEF0FF; } .drop { background:#fff; }
+  .drop strong { color:var(--text); }
+  .progress { margin-top:14px; display:none; }
+  .progress .bar { height:8px; background:var(--line); border-radius:4px; overflow:hidden; }
+  .progress .bar i { display:block; height:100%; width:0; background:var(--accent); transition:width .2s; }
+  .progress small { color:var(--muted); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:16px; }
+  .item { background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; }
+  .item.off { opacity:.55; }
+  .item.dragging { opacity:.4; }
+  .item .thumb { aspect-ratio:16/9; background:#0B0B14; display:grid; place-items:center; position:relative; cursor:grab; }
+  .item .thumb img, .item .thumb video { width:100%; height:100%; object-fit:contain; }
+  .item .thumb .num { position:absolute; top:8px; left:8px; background:rgba(13,11,110,.85); color:#fff; font-size:12px; padding:2px 8px; border-radius:10px; }
+  .item .thumb .kind { position:absolute; top:8px; right:8px; background:rgba(13,11,110,.85); color:#fff; font-size:11px; padding:2px 8px; border-radius:10px; text-transform:uppercase; }
+  .item .body { padding:12px; display:flex; flex-direction:column; gap:8px; }
+  .item .name { font-size:13px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .item .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .item input[type=text] { width:100%; }
+  .toggle { display:flex; align-items:center; gap:6px; cursor:pointer; color:var(--text); font-size:13px; }
+  .settings { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; }
+  .settings .field { display:flex; flex-direction:column; gap:6px; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#0D0B6E; color:#fff; padding:10px 16px; border-radius:10px; opacity:0; transition:.2s; pointer-events:none; }
+  .toast.show { opacity:1; }
+  .toast.err { background:var(--danger); }
+  .login { max-width:360px; margin:12vh auto; }
+  .login h2 { margin:0 0 16px; font-family:'DM Serif Display',serif; font-weight:400; font-size:30px; } .login img { height:34px; margin-bottom:18px; }
+  .login form { display:flex; flex-direction:column; gap:12px; }
+  .muted { color:var(--muted); }
+  .count { color:var(--muted); font-size:14px; }
+  .empty { text-align:center; color:var(--muted); padding:40px; }
+  table.meta { width:100%; border-collapse:collapse; font-size:13px; }
+  table.meta th, table.meta td { padding:7px 8px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; }
+  table.meta th { color:var(--muted); font-weight:700; font-size:12px; }
+  table.meta th:first-child, table.meta td:first-child { text-align:left; white-space:normal; min-width:220px; }
+  table.meta img { width:36px; height:36px; object-fit:cover; border-radius:6px; vertical-align:middle; margin-right:8px; background:#eee; }
+  .up { color:var(--ok); font-weight:700; } .down { color:var(--danger); font-weight:700; } .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; background:#E6E8F4; color:var(--muted); }
+  .pill.on { background:#DDF3E4; color:var(--ok); }
+  .stat { min-width:88px; }
+  .stat b { display:block; font-size:24px; font-family:'DM Serif Display',serif; font-weight:400; color:var(--text); line-height:1.2; }
+  .stat span { font-size:12px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.03em; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  const app = document.getElementById("app");
+  const toastEl = document.getElementById("toast");
+  // The Instagram & Ads tab needs its own password (set as META_ADMIN_PASSWORD on the server) even once
+  // signed in to the portal, so the shared upload password alone can't touch real ad spend.
+  const metaPw = () => sessionStorage.getItem("qd_meta_pw") || "";
+  const askMetaPassword = () => {
+    const p = window.prompt("Instagram & Ads password (separate from the portal password):");
+    if (p) sessionStorage.setItem("qd_meta_pw", p);
+    return p || "";
+  };
+  const api = async (url, opts = {}) => {
+    const isMeta = url.startsWith("/api/meta/");
+    const headers = { ...(opts.body && !(opts.body instanceof FormData) ? { "Content-Type": "application/json" } : {}),
+      ...(isMeta && metaPw() ? { "X-Meta-Password": metaPw() } : {}) };
+    const r = await fetch(url, { headers, ...opts,
+      body: opts.body && !(opts.body instanceof FormData) ? JSON.stringify(opts.body) : opts.body });
+    const data = await r.json().catch(() => ({}));
+    if (r.status === 401 && isMeta) {
+      sessionStorage.removeItem("qd_meta_pw");
+      if (askMetaPassword()) return api(url, opts);
+      throw new Error("Instagram & Ads password required");
+    }
+    if (r.status === 401 && !url.endsWith("/login")) { renderLogin(); throw new Error("Signed out"); }
+    if (!r.ok) throw new Error(data.error || `Request failed (${r.status})`);
+    return data;
+  };
+  const toast = (msg, err = false) => { toastEl.textContent = msg; toastEl.className = "toast show" + (err ? " err" : ""); setTimeout(() => toastEl.className = "toast", 3000); };
+  const fmtSize = (b) => b > 1e9 ? (b / 1e9).toFixed(2) + " GB" : b > 1e6 ? (b / 1e6).toFixed(1) + " MB" : Math.round(b / 1e3) + " KB";
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  let media = [];
+  let settings = {};
+  let tab = "playlist";
+  let ach = { students: [], error: null };
+
+  // ---------- login ----------
+  function renderLogin() {
+    app.innerHTML = `
+      <main><div class="card login">
+        <img src="/assets/qlass-logo.png" alt="Qlass Learning">
+        <h2>Display portal</h2>
+        <p class="muted">Enter the team password to manage what plays on the TV.</p>
+        <form id="loginForm">
+          <input type="password" id="pw" placeholder="Password" autofocus required>
+          <button type="submit">Sign in</button>
+          <div id="loginErr" class="muted"></div>
+        </form>
+      </div></main>`;
+    document.getElementById("loginForm").onsubmit = async (e) => {
+      e.preventDefault();
+      try { await api("/api/login", { method: "POST", body: { password: document.getElementById("pw").value } }); await load(); }
+      catch (err) { document.getElementById("loginErr").textContent = err.message; }
+    };
+  }
+
+  // ---------- main UI ----------
+  async function load() {
+    [media, settings] = await Promise.all([api("/api/media"), api("/api/settings")]);
+    renderApp();
+  }
+
+  function renderApp() {
+    app.innerHTML = `
+      <header>
+        <div class="brand"><img src="/assets/qlass-logo.png" alt="Qlass Learning"><i></i><h1>Display portal</h1></div>
+        <div class="links">
+          <a class="btn ghost" style="border:1px solid var(--line);background:#fff;color:var(--text)" href="/studio">Social studio</a>
+          <a class="btn" href="/" target="_blank">Open TV player ↗</a>
+          <button class="ghost" id="revokeSessions" title="Sign out every device, e.g. if the password leaked">Sign out everywhere</button>
+          <button class="ghost" id="logout">Sign out</button>
+        </div>
+      </header>
+      <main>
+        <h2 class="title">What plays on the TV</h2>
+        <p class="sub">Uploads and achiever slides loop on display.qlass.in. Changes reach the TV within ${settings.refreshInterval} seconds.</p>
+        <div class="tabs"><button data-tab="playlist">Playlist</button><button data-tab="achievers">Achievers</button><button data-tab="settings">Settings</button><button data-tab="meta">Instagram &amp; Ads</button></div>
+        <section data-pane="meta">
+        <div class="card" style="margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+            <h3 style="margin:0;font-size:15px">Instagram daily tracking <span class="count" id="metaWhen"></span></h3>
+            <div style="display:flex;gap:8px;align-items:center">
+              <select id="metaDays"><option value="7">Last 7 days</option><option value="14">Last 14 days</option><option value="30">Last 30 days</option></select>
+              <button class="ghost" id="metaSnap">Record today now</button>
+            </div>
+          </div>
+          <div id="metaToday" style="display:none;margin:12px 0 2px;gap:18px;flex-wrap:wrap"></div>
+          <div id="metaFollowers" class="muted" style="margin:10px 0 0"></div>
+        </div>
+        <div class="card" style="margin-bottom:16px;overflow:auto">
+          <h3 style="margin:0 0 10px;font-size:15px">Videos &amp; posts <span class="count">Δ = change since previous day · window = change over the selected period</span></h3>
+          <table class="meta" id="metaMedia"></table>
+        </div>
+        <div class="card" style="overflow:auto">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+            <h3 style="margin:0;font-size:15px">Ad campaigns <span class="count" id="metaAcct"></span></h3>
+            <button class="danger" id="metaPauseAll">Pause all campaigns</button>
+          </div>
+          <table class="meta" id="metaAds" style="margin-top:10px"></table>
+        </div>
+        </section>
+        <section data-pane="achievers">
+          <div class="card">
+            <div class="settings">
+              <div class="field" style="grid-column:1/-1"><label>Results sheet (Google Sheets link, shared “Anyone with the link · Viewer”)</label><input type="url" id="a_sheetUrl" value="${esc(settings.achievers.sheetUrl)}"></div>
+              <div class="field" style="grid-column:1/-1"><label>Student photo link — {id} becomes the QLASS ID</label><input type="text" id="a_photoPattern" placeholder="https://portal.qlass.in/photos/{id}.jpg" value="${esc(settings.achievers.photoPattern)}"></div>
+              <div class="field"><label>Test to feature</label><select id="a_test"></select></div>
+              <div class="field"><label>Class</label><select id="a_cls"></select></div>
+              <div class="field"><label>Show achievers on TV</label><select id="a_enabled"><option value="1" ${settings.achievers.enabled ? "selected" : ""}>On</option><option value="0" ${!settings.achievers.enabled ? "selected" : ""}>Off</option></select></div>
+              <div class="field"><label>Minimum score (%)</label><input type="number" min="0" max="100" id="a_minPercent" value="${settings.achievers.minPercent}"></div>
+              <div class="field"><label>One achiever after every N uploads</label><input type="number" min="1" id="a_every" value="${settings.achievers.every}"></div>
+              <div class="field"><label>Seconds per achiever slide</label><input type="number" min="3" id="a_duration" value="${settings.achievers.duration}"></div>
+              <div class="field"><label>Seconds for “Our Achievers” summary</label><input type="number" min="3" id="a_recapDuration" value="${settings.achievers.recapDuration}"></div>
+              <div class="field"><label>Website / contact line</label><input type="text" id="a_contact" value="${esc(settings.contact)}"></div>
+              <div class="field" style="justify-content:flex-end"><button id="saveAch">Save &amp; reload results</button></div>
+            </div>
+          </div>
+          <div class="card"><h3 style="margin:0 0 6px;font-size:15px">On the TV <span class="count" id="achCount"></span></h3><div id="achStatus" class="muted" style="font-size:13px;margin-bottom:6px"></div><div id="achList"></div></div>
+        </section>
+        <section data-pane="playlist">
+        <div class="card">
+          <div class="drop" id="drop">
+            <strong>Drop photos or videos here</strong> or click to choose files<br>
+            <span style="font-size:13px">JPG, PNG, GIF, WebP · MP4, WebM, MOV · multiple files at once</span>
+            <input type="file" id="file" multiple accept="image/*,video/*" hidden>
+          </div>
+          <div class="progress" id="progress"><div class="bar"><i id="bar"></i></div><small id="progressText"></small></div>
+        </div>
+
+        </section>
+        <section data-pane="settings">
+        <div class="card">
+          <h3 style="margin:0 0 14px;font-size:15px">Playback settings</h3>
+          <div class="settings">
+            <div class="field"><label>Seconds per photo (default)</label><input type="number" min="1" id="s_imageDuration" value="${settings.imageDuration}"></div>
+            <div class="field"><label>Transition</label><select id="s_transition"><option value="fade" ${settings.transition === "fade" ? "selected" : ""}>Fade</option><option value="none" ${settings.transition === "none" ? "selected" : ""}>Cut</option></select></div>
+            <div class="field"><label>Order</label><select id="s_shuffle"><option value="0" ${!settings.shuffle ? "selected" : ""}>As arranged below</option><option value="1" ${settings.shuffle ? "selected" : ""}>Shuffle</option></select></div>
+            <div class="field"><label>Video sound</label><select id="s_videoSound"><option value="0" ${!settings.videoSound ? "selected" : ""}>Muted</option><option value="1" ${settings.videoSound ? "selected" : ""}>On (if TV allows)</option></select></div>
+            <div class="field"><label>TV checks for changes every (sec)</label><input type="number" min="5" id="s_refreshInterval" value="${settings.refreshInterval}"></div>
+            <div class="field" style="justify-content:flex-end"><button id="saveSettings">Save settings</button></div>
+          </div>
+        </div>
+
+        </section>
+        <section data-pane="playlist">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <h3 style="margin:0;font-size:15px">Playlist <span class="count" id="count"></span></h3>
+          <span class="muted" style="font-size:13px">Drag cards to reorder · changes reach the TV within ${settings.refreshInterval}s</span>
+        </div>
+        <div class="grid" id="grid"></div>
+        </section>
+      </main>`;
+    app.querySelectorAll(".tabs button").forEach((b) => b.onclick = () => { tab = b.dataset.tab; showTab(); if (tab === "achievers") loadAch(); if (tab === "meta") loadMeta(); });
+    document.getElementById("saveAch").onclick = saveAch;
+    document.getElementById("metaDays").onchange = loadMeta;
+    document.getElementById("metaSnap").onclick = async (e) => {
+      e.target.disabled = true; e.target.textContent = "Recording…";
+      try { const r = await api("/api/meta/snapshot", { method: "POST" }); toast(`Recorded ${r.date}: ${r.media} posts${r.errors.length ? " · " + r.errors.join("; ") : ""}`, r.errors.length > 0); await loadMeta(); }
+      catch (err) { toast(err.message, true); }
+      e.target.disabled = false; e.target.textContent = "Record today now";
+    };
+    document.getElementById("metaPauseAll").onclick = async () => {
+      if (!confirm("Pause every active ad campaign? Nothing will spend until you resume one.")) return;
+      try { const r = await api("/api/meta/ads/pause-all", { method: "POST" }); toast(`${r.paused.length} paused, ${r.alreadyOff} already off`); await loadMetaAds(); }
+      catch (err) { toast(err.message, true); }
+    };
+    showTab();
+
+    document.getElementById("logout").onclick = async () => { await api("/api/logout", { method: "POST" }); renderLogin(); };
+    const revokeBtn = document.getElementById("revokeSessions");
+    if (revokeBtn) revokeBtn.onclick = async () => {
+      if (!confirm("Sign out every device currently signed in to the portal, including this one?")) return;
+      try { await api("/api/revoke-sessions", { method: "POST" }); toast("All sessions signed out. Signing you back in…"); await load(); }
+      catch (e) { toast(e.message, true); }
+    };
+    document.getElementById("saveSettings").onclick = saveSettings;
+    wireUpload();
+    renderGrid();
+  }
+
+  // ---------- Instagram & ads ----------
+  const delta = (n) => n == null ? "" : n > 0 ? `<span class="up">+${n.toLocaleString("en-IN")}</span>` : n < 0 ? `<span class="down">${n.toLocaleString("en-IN")}</span>` : `<span class="muted">0</span>`;
+  const num = (n) => Number(n || 0).toLocaleString("en-IN");
+  const inr = (n) => "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+  async function loadMeta() {
+    const when = document.getElementById("metaWhen"), fol = document.getElementById("metaFollowers"), tbl = document.getElementById("metaMedia");
+    when.textContent = "loading…";
+    let r;
+    try { r = await api("/api/meta/report?days=" + document.getElementById("metaDays").value); } catch (e) { when.textContent = ""; fol.innerHTML = `<span class="err">${esc(e.message)}</span>`; return; }
+    if (!r.configured) { when.textContent = ""; fol.innerHTML = "Not connected yet. Set META_ACCESS_TOKEN, META_IG_USER_ID and META_AD_ACCOUNT_ID in .env (see meta/README.md), then restart."; tbl.innerHTML = ""; loadMetaAds(); return; }
+    if (!r.latest) { when.textContent = ""; fol.textContent = "No data recorded yet. Click “Record today now” to take the first snapshot; the server then records automatically every evening."; tbl.innerHTML = ""; loadMetaAds(); return; }
+    when.textContent = `last recorded ${r.latest.date}`;
+    const t = r.today, todayEl = document.getElementById("metaToday");
+    if (t) {
+      todayEl.style.display = "flex";
+      const stat = (label, val, cls = "") => `<div class="stat"><b class="${cls}">${val}</b><span>${label}</span></div>`;
+      todayEl.innerHTML = stat("Views today", num(t.views))
+        + stat("Likes today", num(t.likes))
+        + stat("Comments today", num(t.comments))
+        + stat("New followers", t.newFollowers == null ? "–" : (t.newFollowers >= 0 ? "+" : "") + num(t.newFollowers), t.newFollowers > 0 ? "up" : t.newFollowers < 0 ? "down" : "")
+        + stat("Leads today", t.leads == null ? "–" : num(t.leads))
+        + (t.spend != null ? stat("Ad spend today", inr(t.spend)) : "");
+    } else { todayEl.style.display = "none"; }
+    const f = r.followers, last = f.at(-1), firstF = f.find((x) => x.followers != null);
+    const windowDelta = last && firstF && last !== firstF ? last.followers - firstF.followers : null;
+    fol.innerHTML = `<strong style="color:var(--text);font-size:18px">@${esc(r.latest.account?.username || "")} · ${num(last?.followers)} followers</strong>
+      ${last?.delta != null ? ` &nbsp; today ${delta(last.delta)}` : ""}${windowDelta != null ? ` &nbsp; ${f.length - 1} days ${delta(windowDelta)}` : ""}
+      <div style="margin-top:8px;display:flex;gap:14px;flex-wrap:wrap">${f.map((x) => `<span><span class="muted" style="font-size:12px">${x.date.slice(5)}</span> <b style="color:var(--text)">${x.followers == null ? "–" : num(x.followers)}</b> ${delta(x.delta)}${x.spend != null && x.spend > 0 ? ` <span class="muted" style="font-size:12px">ads ${inr(x.spend)}</span>` : ""}</span>`).join("")}</div>
+      ${r.latest.errors?.length ? `<div class="err" style="margin-top:8px;font-size:12px">${esc(r.latest.errors.join(" · "))}</div>` : ""}`;
+    const w = r.dates.length - 1;
+    tbl.innerHTML = `<tr><th>Post</th><th>Type</th><th>Posted</th><th>Views</th><th>Δ day</th><th>Δ ${w}d</th><th>Reach</th><th>Likes</th><th>Δ</th><th>Comments</th><th>Δ</th><th>Saves</th><th>Shares</th></tr>` +
+      (r.media.length ? r.media.map((m) => `<tr>
+        <td><a href="${esc(m.permalink)}" target="_blank" rel="noopener" style="display:flex;align-items:center;text-decoration:none;color:var(--text)">${m.thumb ? `<img src="${esc(m.thumb)}" alt="" loading="lazy">` : ""}<span>${esc(m.caption || "(no caption)")}${m.isNew ? ' <span class="pill on">new</span>' : ""}</span></a></td>
+        <td><span class="pill">${esc(m.type)}</span></td><td>${esc((m.posted || "").slice(0, 10))}</td>
+        <td><b>${num(m.views)}</b></td><td>${delta(m.dViews)}</td><td>${delta(m.wViews)}</td><td>${num(m.reach)}</td>
+        <td>${num(m.likes)}</td><td>${delta(m.dLikes)}</td><td>${num(m.comments)}</td><td>${delta(m.dComments)}</td><td>${num(m.saved)}</td><td>${num(m.shares)}</td></tr>`).join("")
+      : `<tr><td colspan="13" class="empty">No posts in the latest snapshot.</td></tr>`);
+    loadMetaAds();
+  }
+  async function loadMetaAds() {
+    const acct = document.getElementById("metaAcct"), tbl = document.getElementById("metaAds"), btn = document.getElementById("metaPauseAll");
+    acct.textContent = "loading…";
+    let r;
+    try { r = await api("/api/meta/ads"); } catch (e) { acct.textContent = ""; tbl.innerHTML = `<tr><td class="err">${esc(e.message)}</td></tr>`; return; }
+    if (!r.configured) { acct.textContent = ""; tbl.innerHTML = `<tr><td class="muted">Not connected (META_AD_ACCOUNT_ID / META_ACCESS_TOKEN).</td></tr>`; btn.disabled = true; return; }
+    const active = r.campaigns.filter((c) => c.status === "ACTIVE").length;
+    btn.disabled = active === 0;
+    acct.textContent = `${r.account.id} · ${r.account.funding || ""} · ${active} active · lifetime spend ${inr(r.account.amountSpent)}`;
+    tbl.innerHTML = `<tr><th>Campaign</th><th>Status</th><th>Budget</th><th>Spent (all time)</th><th>Impressions</th><th>Clicks</th><th></th></tr>` +
+      r.campaigns.map((c) => `<tr>
+        <td>${esc(c.name)}<div class="muted" style="font-size:11px">${esc(c.objective || "")} · ${esc(c.id)}</div></td>
+        <td><span class="pill ${c.status === "ACTIVE" ? "on" : ""}">${esc(c.status === "ACTIVE" ? c.effective : c.status)}</span></td>
+        <td>${esc(c.budget)}</td><td>${inr(c.spent)}</td><td>${num(c.impressions)}</td><td>${num(c.clicks)}</td>
+        <td><button class="${c.status === "ACTIVE" ? "danger" : "ghost"}" data-camp="${esc(c.id)}" data-act="${c.status === "ACTIVE" ? "pause" : "resume"}">${c.status === "ACTIVE" ? "Pause" : "Resume"}</button></td></tr>`).join("");
+    tbl.querySelectorAll("button[data-camp]").forEach((b) => b.onclick = async () => {
+      if (b.dataset.act === "resume" && !confirm("Resume this campaign? It will start spending from the ad account balance.")) return;
+      b.disabled = true;
+      try { await api(`/api/meta/ads/${b.dataset.camp}/${b.dataset.act}`, { method: "POST" }); toast(b.dataset.act === "pause" ? "Paused" : "Resumed"); await loadMetaAds(); }
+      catch (e) { toast(e.message, true); b.disabled = false; }
+    });
+  }
+
+  function showTab() {
+    app.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
+    app.querySelectorAll("[data-pane]").forEach((p) => p.style.display = p.dataset.pane === tab ? "" : "none");
+  }
+  async function loadAch(refresh) {
+    const st = document.getElementById("achStatus");
+    st.textContent = "Reading results…"; st.className = "muted";
+    try { ach = await api("/api/achievers" + (refresh ? "?refresh=1" : "")); } catch (e) { st.textContent = e.message; st.className = "err"; return; }
+    renderAch();
+  }
+  function renderAch() {
+    const a = settings.achievers;
+    const tests = [...new Map(ach.students.map((s) => [s.exam, s.ts || 0])).entries()].sort((x, y) => y[1] - x[1]).map((e) => e[0]);
+    const test = a.test && tests.includes(a.test) ? a.test : tests[0] || "";
+    const classes = [...new Set(ach.students.filter((s) => s.exam === test).map((s) => s.cls).filter(Boolean))].sort((x, y) => (parseInt(x.replace(/\D/g, "")) || 0) - (parseInt(y.replace(/\D/g, "")) || 0));
+    document.getElementById("a_test").innerHTML = `<option value="">Most recent (${esc(tests[0] || "—")})</option>` + tests.map((t) => `<option ${t === a.test ? "selected" : ""}>${esc(t)}</option>`).join("");
+    document.getElementById("a_cls").innerHTML = `<option value="">All classes</option>` + classes.map((c) => `<option ${c === a.cls ? "selected" : ""}>${esc(c)}</option>`).join("");
+    const list = ach.students.filter((s) => s.qualifies && s.exam === test && (!a.cls || s.cls === a.cls)).sort((x, y) => y.pct - x.pct);
+    const st = document.getElementById("achStatus");
+    st.textContent = ach.error ? ach.error : `Connected · ${ach.students.length} result rows · ${list.length} at ${a.minPercent}%+`;
+    st.className = ach.error ? "err" : "okc";
+    document.getElementById("achCount").textContent = `· ${list.filter((s) => !a.hidden.includes(s.key)).length} of ${list.length}`;
+    const box = document.getElementById("achList");
+    if (!list.length) { box.innerHTML = `<div class="empty">No students at or above ${a.minPercent}% yet.</div>`; return; }
+    box.innerHTML = list.map((s) => `
+      <div class="ach-row ${a.hidden.includes(s.key) ? "off" : ""}">
+        <div class="dot" style="${s.photoUrl ? `background-image:url('${esc(s.photoUrl)}')` : ""}">${s.photoUrl ? "" : esc(s.initials)}</div>
+        <div class="who"><b>${esc(s.name)}</b><small>${esc([s.cls, s.subjects && s.subjects.length > 1 ? s.best : s.subject].filter(Boolean).join(" · "))}</small></div>
+        <div class="pct">${s.pct}%</div>
+        <label class="toggle"><input type="checkbox" data-key="${esc(s.key)}" ${a.hidden.includes(s.key) ? "" : "checked"}> On TV</label>
+      </div>`).join("");
+    box.querySelectorAll("input[data-key]").forEach((cb) => cb.onchange = async () => {
+      const k = cb.dataset.key, hidden = new Set(settings.achievers.hidden);
+      cb.checked ? hidden.delete(k) : hidden.add(k);
+      try { settings = await api("/api/settings", { method: "PUT", body: { achievers: { hidden: [...hidden] } } }); renderAch(); } catch (e) { toast(e.message, true); }
+    });
+  }
+  async function saveAch() {
+    try {
+      settings = await api("/api/settings", { method: "PUT", body: {
+        contact: document.getElementById("a_contact").value,
+        achievers: {
+          enabled: document.getElementById("a_enabled").value === "1",
+          test: document.getElementById("a_test").value,
+          cls: document.getElementById("a_cls").value,
+          sheetUrl: document.getElementById("a_sheetUrl").value,
+          photoPattern: document.getElementById("a_photoPattern").value,
+          minPercent: document.getElementById("a_minPercent").value,
+          every: document.getElementById("a_every").value,
+          duration: document.getElementById("a_duration").value,
+          recapDuration: document.getElementById("a_recapDuration").value,
+        },
+      }});
+      toast("Saved"); loadAch(true);
+    } catch (e) { toast(e.message, true); }
+  }
+
+  async function saveSettings() {
+    try {
+      settings = await api("/api/settings", { method: "PUT", body: {
+        imageDuration: document.getElementById("s_imageDuration").value,
+        transition: document.getElementById("s_transition").value,
+        shuffle: document.getElementById("s_shuffle").value === "1",
+        videoSound: document.getElementById("s_videoSound").value === "1",
+        refreshInterval: document.getElementById("s_refreshInterval").value,
+      }});
+      toast("Settings saved");
+    } catch (e) { toast(e.message, true); }
+  }
+
+  // ---------- upload ----------
+  function wireUpload() {
+    const drop = document.getElementById("drop");
+    const file = document.getElementById("file");
+    drop.onclick = () => file.click();
+    file.onchange = () => { uploadFiles([...file.files]); file.value = ""; };
+    ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+    ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+    drop.addEventListener("drop", (e) => uploadFiles([...e.dataTransfer.files]));
+  }
+
+  function uploadFiles(files) {
+    if (!files.length) return;
+    const fd = new FormData();
+    files.forEach((f) => fd.append("files", f));
+    const prog = document.getElementById("progress"), bar = document.getElementById("bar"), text = document.getElementById("progressText");
+    prog.style.display = "block"; bar.style.width = "0%";
+    const total = files.reduce((s, f) => s + f.size, 0);
+    text.textContent = `Uploading ${files.length} file${files.length > 1 ? "s" : ""} (${fmtSize(total)})…`;
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/media");
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) { const p = Math.round(e.loaded / e.total * 100); bar.style.width = p + "%"; text.textContent = `Uploading… ${p}%`; } };
+    xhr.onload = async () => {
+      prog.style.display = "none";
+      if (xhr.status === 401) return renderLogin();
+      let data = {}; try { data = JSON.parse(xhr.responseText); } catch {}
+      if (xhr.status >= 400) return toast(data.error || "Upload failed", true);
+      toast(`Added ${data.length} item${data.length > 1 ? "s" : ""}`);
+      media = await api("/api/media"); renderGrid();
+    };
+    xhr.onerror = () => { prog.style.display = "none"; toast("Upload failed (network)", true); };
+    xhr.send(fd);
+  }
+
+  // ---------- grid ----------
+  function renderGrid() {
+    const grid = document.getElementById("grid");
+    document.getElementById("count").textContent = `· ${media.length} item${media.length === 1 ? "" : "s"}, ${media.filter((m) => m.enabled).length} playing`;
+    if (!media.length) { grid.innerHTML = `<div class="empty" style="grid-column:1/-1">Nothing uploaded yet. Drop some photos or videos above.</div>`; return; }
+    grid.innerHTML = media.map((m, i) => `
+      <div class="item ${m.enabled ? "" : "off"}" draggable="true" data-id="${m.id}">
+        <div class="thumb">
+          ${m.type === "video" ? `<video src="/media/${m.file}#t=0.5" preload="metadata" muted></video>` : `<img src="/media/${m.file}" loading="lazy" alt="">`}
+          <span class="num">${i + 1}</span><span class="kind">${m.type}</span>
+        </div>
+        <div class="body">
+          <div class="name" title="${esc(m.originalName)}">${esc(m.originalName)} · ${fmtSize(m.size)}</div>
+          <input type="text" class="caption" placeholder="Caption shown on TV (optional)" value="${esc(m.caption || "")}" maxlength="200">
+          <div class="row">
+            <label class="toggle"><input type="checkbox" class="enabled" ${m.enabled ? "checked" : ""}> Playing</label>
+            <label>${m.type === "video" ? "Cut after (s)" : "Show for (s)"}</label>
+            <input type="number" class="duration" min="1" placeholder="${m.type === "video" ? "full" : settings.imageDuration}" value="${m.duration ?? ""}">
+          </div>
+          <div class="row" style="justify-content:space-between">
+            <span><button class="ghost up" title="Move up">↑</button> <button class="ghost down" title="Move down">↓</button></span>
+            <button class="danger del">Delete</button>
+          </div>
+        </div>
+      </div>`).join("");
+
+    grid.querySelectorAll(".item").forEach((card) => {
+      const id = card.dataset.id;
+      const patch = async (body) => { try { const m = await api(`/api/media/${id}`, { method: "PATCH", body }); Object.assign(media.find((x) => x.id === id), m); } catch (e) { toast(e.message, true); } };
+      card.querySelector(".enabled").onchange = (e) => { patch({ enabled: e.target.checked }); card.classList.toggle("off", !e.target.checked); renderCount(); };
+      card.querySelector(".caption").onchange = (e) => patch({ caption: e.target.value });
+      card.querySelector(".duration").onchange = (e) => patch({ duration: e.target.value === "" ? null : Number(e.target.value) });
+      card.querySelector(".up").onclick = () => move(id, -1);
+      card.querySelector(".down").onclick = () => move(id, +1);
+      card.querySelector(".del").onclick = async () => {
+        if (!confirm("Delete this item from the TV and the server?")) return;
+        try { await api(`/api/media/${id}`, { method: "DELETE" }); media = media.filter((x) => x.id !== id); renderGrid(); toast("Deleted"); } catch (e) { toast(e.message, true); }
+      };
+      // drag to reorder
+      card.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/plain", id); card.classList.add("dragging"); });
+      card.addEventListener("dragend", () => card.classList.remove("dragging"));
+      card.addEventListener("dragover", (e) => e.preventDefault());
+      card.addEventListener("drop", (e) => {
+        e.preventDefault();
+        const from = e.dataTransfer.getData("text/plain");
+        if (!from || from === id) return;
+        const a = media.findIndex((x) => x.id === from), b = media.findIndex((x) => x.id === id);
+        const [moved] = media.splice(a, 1); media.splice(b, 0, moved);
+        renderGrid(); saveOrder();
+      });
+    });
+  }
+  function renderCount() { document.getElementById("count").textContent = `· ${media.length} item${media.length === 1 ? "" : "s"}, ${media.filter((m) => m.enabled).length} playing`; }
+  function move(id, dir) {
+    const i = media.findIndex((x) => x.id === id), j = i + dir;
+    if (j < 0 || j >= media.length) return;
+    [media[i], media[j]] = [media[j], media[i]];
+    renderGrid(); saveOrder();
+  }
+  async function saveOrder() {
+    try { await api("/api/media/order", { method: "PUT", body: { ids: media.map((m) => m.id) } }); } catch (e) { toast(e.message, true); }
+  }
+
+  // ---------- boot ----------
+  (async () => {
+    const me = await api("/api/me");
+    if (me.signedIn) await load(); else renderLogin();
+  })();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qlass Display</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Manrope:wght@500;600;700;800&display=swap">
+<script src="/achiever-art.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  .stage { position: fixed; inset: 0; background: #000; }
+  .layer { position: absolute; inset: 0; opacity: 0; transition: opacity .8s ease; }
+  .layer.show { opacity: 1; }
+  .layer.instant { transition: none; }
+  .layer img, .layer video { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
+  .layer canvas { position: absolute; inset: 0; margin: auto; width: 100vw; height: 56.25vw; max-width: 177.78vh; max-height: 100vh; display: block; }
+  .layer .art { position: absolute; inset: 0; background: #08064F; }
+  .caption { position: absolute; left: 0; right: 0; bottom: 0; padding: 2.5vh 4vw; color: #fff; font-size: 3.2vh;
+    background: linear-gradient(transparent, rgba(0,0,0,.75)); text-shadow: 0 2px 8px rgba(0,0,0,.8); }
+  .caption:empty { display: none; }
+  .empty { position: fixed; inset: 0; display: grid; place-items: center; color: #9aa3b2; text-align: center; padding: 6vw; }
+  .empty[hidden] { display: none; }
+  .empty h1 { font-weight: 600; font-size: 5vh; margin: 0 0 2vh; color: #e8ecf3; }
+  .empty p { font-size: 2.6vh; margin: 0; line-height: 1.5; }
+  .empty code { color: #fff; }
+  .badge { position: fixed; top: 2vh; right: 2vw; color: #fff; background: rgba(0,0,0,.6); padding: .6vh 1.2vw; border-radius: 1vh;
+    font-size: 2vh; opacity: 0; transition: opacity .3s; }
+  .badge.show { opacity: 1; }
+  .tap { position: fixed; inset: 0; display: none; place-items: center; background: rgba(0,0,0,.85); color: #fff; font-size: 4vh; text-align: center; padding: 4vw; }
+  .tap.show { display: grid; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="layer" id="a"></div>
+  <div class="layer" id="b"></div>
+</div>
+<div class="empty" id="empty" hidden>
+  <div>
+    <h1>Qlass Display</h1>
+    <p>No media yet. Upload photos or videos at <code id="adminUrl"></code>.<br>This screen updates automatically.</p>
+  </div>
+</div>
+<div class="badge" id="badge"></div>
+<div class="tap" id="tap"><div>Press OK / tap anywhere to start playback</div></div>
+
+<script>
+(() => {
+  const layers = [document.getElementById("a"), document.getElementById("b")];
+  const emptyEl = document.getElementById("empty");
+  const badge = document.getElementById("badge");
+  const tap = document.getElementById("tap");
+  document.getElementById("adminUrl").textContent = location.origin + "/admin";
+
+  let playlist = { version: null, settings: {}, items: [] };
+  let order = [];       // indices into playlist.items, respecting shuffle
+  let pos = -1;         // position within order
+  let active = 0;       // which layer is on screen
+  let timer = null;
+  let pendingUpdate = null;
+  let userGestureNeeded = false;
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  function shuffled(n) {
+    const a = [...Array(n).keys()];
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  }
+  function rebuildOrder() {
+    const n = playlist.items.length;
+    order = playlist.settings.shuffle ? shuffled(n) : [...Array(n).keys()];
+  }
+
+  async function fetchPlaylist() {
+    try {
+      const r = await fetch("/api/playlist", { cache: "no-store" });
+      if (!r.ok) throw new Error(r.status);
+      return await r.json();
+    } catch (e) {
+      console.warn("playlist fetch failed", e);
+      return null;
+    }
+  }
+
+  function applyUpdate(p) {
+    const wasEmpty = playlist.items.length === 0;
+    playlist = p;
+    rebuildOrder();
+    if (wasEmpty || pos >= order.length) pos = -1;
+    emptyEl.hidden = p.items.length > 0;
+    flash(p.items.length ? `Updated · ${p.items.length} item${p.items.length === 1 ? "" : "s"}` : "");
+  }
+
+  function flash(text) {
+    if (!text) return;
+    badge.textContent = text;
+    badge.classList.add("show");
+    setTimeout(() => badge.classList.remove("show"), 2500);
+  }
+
+  // Poll for changes; apply at the next item boundary so playback isn't cut mid-video.
+  async function pollLoop() {
+    for (;;) {
+      await sleep((playlist.settings.refreshInterval || 30) * 1000);
+      const p = await fetchPlaylist();
+      if (p && p.version !== playlist.version) pendingUpdate = p;
+    }
+  }
+
+  // Achiever slides are drawn on a canvas by achiever-art.js (same artwork as the Social Studio).
+  let artLogo = null, artBg;
+  const photoCache = new Map();
+  const loadPhoto = (url) => { if (!url) return Promise.resolve(null); if (!photoCache.has(url)) photoCache.set(url, QlassArt.loadImage(url)); return photoCache.get(url); };
+  function buildArt(item) {
+    const wrap = document.createElement("div");
+    wrap.className = "art";
+    const cv = document.createElement("canvas");
+    cv.width = 1920; cv.height = 1080;
+    wrap.appendChild(cv);
+    const ctx = cv.getContext("2d");
+    const people = item.type === "recap" ? item.students : [item.student];
+    let raf = 0, t0 = 0;
+    const opts = { logo: null, contact: playlist.settings.contact || "", minPct: item.minPercent };
+    const paint = (t) => {
+      ctx.clearRect(0, 0, 1920, 1080);
+      if (item.type === "recap") QlassArt.drawRecap(ctx, "landscape", people, { ...opts, t });
+      else QlassArt.drawStudent(ctx, "landscape", people[0], { ...opts, t });
+    };
+    cv._ready = (async () => {
+      await QlassArt.ready();
+      if (!artLogo) artLogo = await QlassArt.loadImage("/assets/qlass-logo-white.png");
+      if (artBg === undefined) artBg = await QlassArt.loadImage("/assets/photos/classroom.jpg");
+      opts.logo = artLogo; opts.bgPhoto = artBg;
+      await Promise.race([
+        Promise.all(people.map(async (p) => { p.photo = await loadPhoto(p.photoUrl); })),
+        sleep(4000),
+      ]);
+      paint(0);
+      return true;
+    })();
+    cv._start = () => {
+      t0 = performance.now();
+      const loop = () => { const t = (performance.now() - t0) / 1000; paint(t); if (t < 6 && cv.isConnected) raf = requestAnimationFrame(loop); };
+      loop();
+    };
+    cv._stop = () => cancelAnimationFrame(raf);
+    return { wrap, el: cv };
+  }
+
+  function buildElement(item, settings) {
+    if (item.type === "achiever" || item.type === "recap") return buildArt(item);
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "position:absolute;inset:0";
+    let el;
+    if (item.type === "video") {
+      el = document.createElement("video");
+      el.src = item.url;
+      el.muted = !settings.videoSound;
+      el.autoplay = false;
+      el.playsInline = true;
+      el.preload = "auto";
+      el.setAttribute("playsinline", "");
+    } else {
+      el = document.createElement("img");
+      el.src = item.url;
+      el.alt = "";
+      el.decoding = "async";
+    }
+    const cap = document.createElement("div");
+    cap.className = "caption";
+    cap.textContent = item.caption || "";
+    wrap.append(el, cap);
+    return { wrap, el };
+  }
+
+  function waitReady(el, timeoutMs) {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (ok) => { if (!done) { done = true; resolve(ok); } };
+      const t = setTimeout(() => finish(false), timeoutMs);
+      if (el.tagName === "CANVAS") { el._ready.then((ok) => { clearTimeout(t); finish(ok); }, () => { clearTimeout(t); finish(false); }); return; }
+      if (el.tagName === "IMG") {
+        if (el.complete && el.naturalWidth) { clearTimeout(t); return finish(true); }
+        el.onload = () => { clearTimeout(t); finish(true); };
+        el.onerror = () => { clearTimeout(t); finish(false); };
+      } else {
+        if (el.readyState >= 3) { clearTimeout(t); return finish(true); }
+        el.oncanplay = () => { clearTimeout(t); finish(true); };
+        el.onerror = () => { clearTimeout(t); finish(false); };
+      }
+    });
+  }
+
+  async function showNext() {
+    clearTimeout(timer);
+    if (pendingUpdate) { applyUpdate(pendingUpdate); pendingUpdate = null; }
+    if (!order.length) {
+      layers.forEach((l) => { l.classList.remove("show"); l.innerHTML = ""; });
+      timer = setTimeout(showNext, 5000);
+      return;
+    }
+    pos = (pos + 1) % order.length;
+    if (pos === 0 && playlist.settings.shuffle) rebuildOrder();
+    const item = playlist.items[order[pos]];
+    if (!item) { timer = setTimeout(showNext, 500); return; }
+
+    const next = layers[1 - active];
+    const cur = layers[active];
+    const { wrap, el } = buildElement(item, playlist.settings);
+    next.innerHTML = "";
+    next.appendChild(wrap);
+    const instant = playlist.settings.transition === "none";
+    layers.forEach((l) => l.classList.toggle("instant", instant));
+
+    const ok = await waitReady(el, item.type === "video" ? 20000 : 15000);
+    if (!ok) {
+      console.warn("skipping unplayable item", item.url);
+      next.innerHTML = "";
+      timer = setTimeout(showNext, 300);
+      return;
+    }
+
+    if (item.type === "video") {
+      try {
+        await el.play();
+      } catch (err) {
+        // Autoplay with sound is blocked until a user gesture; fall back to muted.
+        if (!el.muted) { el.muted = true; try { await el.play(); } catch { /* handled below */ } }
+        if (el.paused) {
+          userGestureNeeded = true;
+          tap.classList.add("show");
+          return;
+        }
+      }
+    }
+
+    if (el._start) el._start();
+    next.classList.add("show");
+    cur.classList.remove("show");
+    active = 1 - active;
+    // Free the previous layer's media after the fade so the TV doesn't keep decoding it.
+    setTimeout(() => { const c = cur.querySelector("canvas"); if (c && c._stop) c._stop(); const v = cur.querySelector("video"); if (v) { v.pause(); v.removeAttribute("src"); v.load(); } cur.innerHTML = ""; }, instant ? 0 : 900);
+
+    if (item.type === "video") {
+      const dur = Number(item.duration);
+      el.onended = () => showNext();
+      el.onerror = () => showNext();
+      // Safety net: if 'ended' never fires (stalled stream), move on after the known length + grace.
+      const fallbackMs = ((Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 600) + 15) * 1000;
+      timer = setTimeout(showNext, dur > 0 ? dur * 1000 : fallbackMs);
+    } else {
+      const secs = Number(item.duration) > 0 ? Number(item.duration) : (playlist.settings.imageDuration || 10);
+      timer = setTimeout(showNext, secs * 1000);
+    }
+  }
+
+  // Resume after a required user gesture (some TV browsers).
+  const resume = () => {
+    if (!userGestureNeeded) return;
+    userGestureNeeded = false;
+    tap.classList.remove("show");
+    pos -= 1; // replay the item that was blocked
+    showNext();
+  };
+  ["click", "keydown", "touchstart"].forEach((ev) => document.addEventListener(ev, resume));
+
+  // Keep the screen awake where supported.
+  async function keepAwake() {
+    try {
+      if ("wakeLock" in navigator) {
+        let lock = await navigator.wakeLock.request("screen");
+        document.addEventListener("visibilitychange", async () => {
+          if (document.visibilityState === "visible") lock = await navigator.wakeLock.request("screen").catch(() => null);
+        });
+      }
+    } catch { /* not supported */ }
+  }
+
+  // Reload the whole page once a day to shake off memory leaks in TV browsers.
+  setTimeout(() => location.reload(), 24 * 3600 * 1000);
+
+  (async () => {
+    keepAwake();
+    let p = await fetchPlaylist();
+    while (!p) { await sleep(5000); p = await fetchPlaylist(); }
+    applyUpdate(p);
+    badge.classList.remove("show");
+    pollLoop();
+    showNext();
+  })();
+})();
+</script>
+</body>
+</html>
