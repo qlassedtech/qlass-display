@@ -21,21 +21,27 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT || 22 }}
           script_stop: true
+          # This host runs the app under PM2 behind the box's existing nginx (shared with several
+          # other qlass.in sites) rather than Docker+Caddy — Caddy grabbing 80/443 here would break
+          # every other site on the server. If you move to a dedicated box, switch this back to the
+          # docker compose approach instead.
           script: |
             set -e
             APP_DIR="${{ secrets.DEPLOY_PATH || '~/qlass-display' }}"
-            if [ ! -d "$APP_DIR/.git" ]; then
-              git clone https://github.com/${{ github.repository }}.git "$APP_DIR"
-            fi
             cd "$APP_DIR"
+            if [ ! -d .git ]; then
+              git init -b main
+              git remote add origin https://github.com/${{ github.repository }}.git
+            fi
             git fetch --all --prune
             git reset --hard origin/main
+            git clean -fd --exclude=.env --exclude=data --exclude=node_modules
             if [ ! -f .env ]; then
-              echo "ERROR: $APP_DIR/.env is missing. Create it from .env.example (ADMIN_PASSWORD, SESSION_SECRET)." >&2
+              echo "ERROR: $APP_DIR/.env is missing. Create it from .env.example." >&2
               exit 1
             fi
             mkdir -p data/uploads
-            docker compose up -d --build --remove-orphans
-            docker image prune -f >/dev/null
-            sleep 5
-            curl -fsS http://localhost:${PORT:-3000}/healthz || docker compose logs --tail=50
+            npm ci --omit=dev
+            pm2 restart qlass-display --update-env
+            sleep 3
+            curl -fsS http://localhost:3200/healthz || pm2 logs qlass-display --lines 50 --nostream
