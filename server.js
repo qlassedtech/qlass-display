@@ -305,7 +305,14 @@ app.use("/media", express.static(UPLOAD_DIR, { maxAge: "365d", immutable: true, 
 
 app.get("/", (_req, res) => res.sendFile(path.join(__dirname, "public", "display.html")));
 app.get("/admin", (_req, res) => res.sendFile(path.join(__dirname, "public", "admin.html")));
-app.get("/studio", (_req, res) => res.sendFile(path.join(__dirname, "public", "studio.html")));
+// /studio is a thin shell (site nav + iframe) wrapped around the actual Social Studio
+// app, which lives at /studio/app. Keeping the app on its own path means the shell can
+// carry a persistent "back to the rest of the site" nav without touching the app's own
+// bundled HTML (studio.html is a self-contained exported artifact bundle that replaces
+// the whole <html> element on load, so anything added directly to that file is wiped
+// out the moment it runs).
+app.get("/studio", (_req, res) => res.sendFile(path.join(__dirname, "public", "studio-shell.html")));
+app.get("/studio/app", (_req, res) => res.sendFile(path.join(__dirname, "public", "studio.html")));
 
 // --- auth ---
 app.post("/api/login", loginLimiter, (req, res) => {
