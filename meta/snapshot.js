@@ -120,6 +120,43 @@ export async function report(days = 7) {
   return { dates: windowDates, latest: { date: latest.date, takenAt: latest.takenAt, account: latest.account, ads: latest.ads, errors: latest.errors }, today, followers, media };
 }
 
+/**
+ * Per-video rows for each of the last N days, each row carrying that day's raw
+ * values plus the delta vs the previous day for the same video — the "day vs
+ * yesterday" breakdown the admin dashboard table renders.
+ */
+export async function dailyBreakdown(days = 7) {
+  const allDates = await listSnapshots();
+  if (!allDates.length) return { dates: [], rows: [], followers: [] };
+  const windowDates = allDates.slice(-(days + 1)); // one extra day so day 1 in the table has a prior-day delta
+  const snaps = await Promise.all(windowDates.map(load));
+
+  const rows = [];
+  for (let i = 1; i < snaps.length; i++) {
+    const cur = snaps[i], prev = snaps[i - 1];
+    const prevById = Object.fromEntries((prev.media || []).map((m) => [m.id, m]));
+    for (const m of cur.media || []) {
+      const p = prevById[m.id];
+      rows.push({
+        date: cur.date, id: m.id, type: m.type, permalink: m.permalink, posted: m.posted,
+        caption: m.caption, thumb: m.thumb,
+        views: m.views, likes: m.likes, comments: m.comments,
+        dViews: m.views - (p?.views ?? m.views), dLikes: m.likes - (p?.likes ?? m.likes), dComments: m.comments - (p?.comments ?? m.comments),
+        isNew: !p,
+      });
+    }
+  }
+  rows.sort((a, b) => b.date.localeCompare(a.date) || b.views - a.views);
+
+  const followers = [];
+  for (let i = 1; i < snaps.length; i++) {
+    const cur = snaps[i].account?.followers, prev = snaps[i - 1].account?.followers;
+    followers.push({ date: snaps[i].date, followers: cur ?? null, delta: cur != null && prev != null ? cur - prev : null });
+  }
+
+  return { dates: windowDates.slice(1), rows, followers };
+}
+
 // ---------------- CLI ----------------
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop());
 if (isMain) {
@@ -141,8 +178,15 @@ if (isMain) {
       console.log(`\nVideos & posts (Δ = since previous snapshot, ${r.dates.length - 1}d = over the window):`);
       console.log(`${pad("views", 8)} ${pad("Δ", 6)} ${pad(`${r.dates.length - 1}d`, 6)} ${pad("likes", 6)} ${pad("Δ", 4)} ${pad("cmts", 5)} ${pad("Δ", 4)}  type   posted      caption`);
       for (const m of r.media) console.log(`${pad(m.views, 8)} ${pad(m.dViews, 6)} ${pad(m.wViews, 6)} ${pad(m.likes, 6)} ${pad(m.dLikes, 4)} ${pad(m.comments, 5)} ${pad(m.dComments, 4)}  ${(m.type || "").padEnd(6)} ${m.posted.slice(0, 10)}  ${m.caption.slice(0, 50)}`);
+    } else if (cmd === "daily") {
+      const r = await dailyBreakdown(Number(a) || 7);
+      if (!r.rows.length) { console.log("Not enough snapshots yet for a day-over-day breakdown (need at least 2 days). Run: node meta/snapshot.js take"); process.exit(0); }
+      console.log("Followers by day:");
+      for (const f of r.followers) console.log(`  ${f.date}  ${pad(f.followers, 6)}  ${f.delta != null ? (f.delta >= 0 ? "+" : "") + f.delta : ""}`);
+      console.log(`\n${pad("date", 10)} ${pad("views", 8)} ${pad("Δ", 6)} ${pad("likes", 6)} ${pad("Δ", 4)} ${pad("cmts", 5)} ${pad("Δ", 4)}  type   caption`);
+      for (const m of r.rows) console.log(`${m.date} ${pad(m.views, 8)} ${pad(m.dViews, 6)} ${pad(m.likes, 6)} ${pad(m.dLikes, 4)} ${pad(m.comments, 5)} ${pad(m.dComments, 4)}  ${(m.type || "").padEnd(6)} ${m.caption.slice(0, 50)}`);
     } else {
-      console.log("commands: take | report [days]");
+      console.log("commands: take | report [days] | daily [days]");
     }
   } catch (e) { console.error(`Error: ${e.message}`); process.exit(1); }
 }

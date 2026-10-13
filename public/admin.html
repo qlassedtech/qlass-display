@@ -180,6 +180,10 @@
           <h3 style="margin:0 0 10px;font-size:15px">Videos &amp; posts <span class="count">Δ = change since previous day · window = change over the selected period</span></h3>
           <table class="meta" id="metaMedia"></table>
         </div>
+        <div class="card" style="margin-bottom:16px;overflow:auto">
+          <h3 style="margin:0 0 10px;font-size:15px">Daily breakdown, per video <span class="count">one row per video per day · Δ = vs the previous day for that same video</span></h3>
+          <table class="meta" id="metaDaily"></table>
+        </div>
         <div class="card" style="overflow:auto">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
             <h3 style="margin:0;font-size:15px">Ad campaigns <span class="count" id="metaAcct"></span></h3>
@@ -304,7 +308,23 @@
         <td><b>${num(m.views)}</b></td><td>${delta(m.dViews)}</td><td>${delta(m.wViews)}</td><td>${num(m.reach)}</td>
         <td>${num(m.likes)}</td><td>${delta(m.dLikes)}</td><td>${num(m.comments)}</td><td>${delta(m.dComments)}</td><td>${num(m.saved)}</td><td>${num(m.shares)}</td></tr>`).join("")
       : `<tr><td colspan="13" class="empty">No posts in the latest snapshot.</td></tr>`);
+    loadMetaDaily();
     loadMetaAds();
+  }
+  async function loadMetaDaily() {
+    const tbl = document.getElementById("metaDaily");
+    let r;
+    try { r = await api("/api/meta/daily?days=" + document.getElementById("metaDays").value); } catch (e) { tbl.innerHTML = `<tr><td class="err">${esc(e.message)}</td></tr>`; return; }
+    if (!r.configured) { tbl.innerHTML = ""; return; }
+    if (!r.rows || !r.rows.length) { tbl.innerHTML = `<tr><td class="empty">Need at least 2 days of snapshots to compare day vs day. ${r.dates?.length ? "" : "Click “Record today now”, then come back tomorrow for the first comparison."}</td></tr>`; return; }
+    tbl.innerHTML = `<tr><th>Date</th><th>Post</th><th>Type</th><th>Views</th><th>Δ day</th><th>Likes</th><th>Δ</th><th>Comments</th><th>Δ</th></tr>` +
+      r.rows.map((m) => `<tr>
+        <td>${esc(m.date)}</td>
+        <td><a href="${esc(m.permalink)}" target="_blank" rel="noopener" style="display:flex;align-items:center;text-decoration:none;color:var(--text)">${m.thumb ? `<img src="${esc(m.thumb)}" alt="" loading="lazy">` : ""}<span>${esc(m.caption || "(no caption)")}${m.isNew ? ' <span class="pill on">new</span>' : ""}</span></a></td>
+        <td><span class="pill">${esc(m.type)}</span></td>
+        <td><b>${num(m.views)}</b></td><td>${delta(m.dViews)}</td>
+        <td>${num(m.likes)}</td><td>${delta(m.dLikes)}</td>
+        <td>${num(m.comments)}</td><td>${delta(m.dComments)}</td></tr>`).join("");
   }
   async function loadMetaAds() {
     const acct = document.getElementById("metaAcct"), tbl = document.getElementById("metaAds"), btn = document.getElementById("metaPauseAll");

@@ -489,6 +489,12 @@ app.post("/api/meta/snapshot", requireAuth, requireMetaAuth, async (_req, res) =
   try { const s = await metaSnapshot.take(); res.json({ ok: true, date: s.date, media: s.media.length, errors: s.errors }); }
   catch (e) { res.status(502).json({ error: e.message }); }
 });
+app.get("/api/meta/daily", requireAuth, requireMetaAuth, async (req, res, next) => {
+  try {
+    const r = await metaSnapshot.dailyBreakdown(Math.min(Math.max(Number(req.query.days) || 7, 1), 30));
+    res.json({ configured: metaGraph.isConfigured(), ...r });
+  } catch (e) { next(e); }
+});
 app.get("/api/meta/ads", requireAuth, requireMetaAuth, async (_req, res) => {
   if (!metaGraph.isConfigured()) return res.json({ configured: false });
   try { res.json({ configured: true, ...(await metaAds.status()) }); }
