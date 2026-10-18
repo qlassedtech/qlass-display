@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Qlass Display</title>
+<!-- Lets Chrome's "Add to Home Screen" launch this as a standalone (no address bar) app — the
+     practical way to hide the browser chrome on a TV box that's locked to plain Chrome with no
+     kiosk-app install available. -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="apple-touch-icon" href="/assets/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Manrope:wght@500;600;700;800&display=swap">
 <!-- Written in plain ES5 (var/function, no arrow/template-literal/let/const) on purpose: this is the
@@ -40,7 +49,36 @@
       while (list.children.length > MAX_LINES) list.removeChild(list.firstChild);
       panel.scrollTop = panel.scrollHeight;
     } catch (e) { /* even the fallback failed; nothing more we can do */ }
+    queueForServer(level, label, detail);
   }
+
+  // Ships every log line to the server too, so debugging this TV never needs another photo — read
+  // it back any time via GET /api/client-log instead. Batched and sent periodically (not one request
+  // per line) to stay light on an unattended, possibly flaky TV connection; failed batches are kept
+  // and retried rather than dropped, capped so a long outage can't grow this without bound.
+  var sessionId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  var pending = [];
+  var MAX_PENDING = 300;
+  function queueForServer(level, label, detail) {
+    pending.push({ t: Date.now(), level: level, label: label, detail: detail || "" });
+    if (pending.length > MAX_PENDING) pending.splice(0, pending.length - MAX_PENDING);
+  }
+  function flushToServer() {
+    if (!pending.length || typeof fetch !== "function") return;
+    var batch = pending;
+    pending = [];
+    fetch("/api/client-log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session: sessionId, entries: batch }),
+      keepalive: true,
+    }).catch(function () {
+      // Put it back (ahead of anything logged since) rather than lose it; still capped above.
+      pending = batch.concat(pending);
+    });
+  }
+  setInterval(flushToServer, 5000);
+  window.addEventListener("pagehide", flushToServer);
   window.addEventListener("error", function (e) {
     var msg = (e && e.message) || "unknown error";
     var where = e && e.filename ? (e.filename.split("/").pop() + ":" + e.lineno) : "";

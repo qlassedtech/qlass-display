@@ -25,6 +25,7 @@ const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 const MEDIA_FILE = path.join(DATA_DIR, "media.json");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 const AUTH_FILE = path.join(DATA_DIR, "auth.json");
+const CLIENT_LOG_FILE = path.join(DATA_DIR, "client-log.json");
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
@@ -364,6 +365,43 @@ app.get("/api/playlist", async (_req, res) => {
   res.setHeader("Cache-Control", "no-store");
   res.json({ version, settings: publicSettings, items: publicItems });
 });
+
+// --- TV client-side diagnostics (display.html's on-screen log also ships here, so debugging an
+// unattended TV never needs a photo of the screen) ---
+const MAX_CLIENT_LOG_ENTRIES = 2000; // caps file size over long unattended uptime
+let clientLogChain = Promise.resolve(); // serializes writes, same pattern as withMedia
+function appendClientLog(session, entries) {
+  clientLogChain = clientLogChain.then(async () => {
+    const log = await readJson(CLIENT_LOG_FILE, []);
+    for (const e of entries) {
+      log.push({
+        session: String(session || "").slice(0, 40),
+        t: Number.isFinite(e.t) ? e.t : Date.now(),
+        level: ["ok", "info", "warn", "error"].includes(e.level) ? e.level : "info",
+        label: String(e.label || "").slice(0, 300),
+        detail: String(e.detail || "").slice(0, 1000),
+        receivedAt: new Date().toISOString(),
+      });
+    }
+    if (log.length > MAX_CLIENT_LOG_ENTRIES) log.splice(0, log.length - MAX_CLIENT_LOG_ENTRIES);
+    await writeJson(CLIENT_LOG_FILE, log);
+  });
+  return clientLogChain;
+}
+// No auth: this is the unattended TV itself posting, which has no session cookie, and the payload
+// is just operational status text (slide positions, play() outcomes) — nothing sensitive.
+app.post("/api/client-log", async (req, res) => {
+  const { session, entries } = req.body || {};
+  if (!Array.isArray(entries) || !entries.length) return res.status(400).json({ error: "entries required" });
+  await appendClientLog(session, entries.slice(0, 300)); // also capped per-request, mirrors the client's own MAX_PENDING
+  res.json({ ok: true });
+});
+app.get("/api/client-log", requireAuth, async (req, res) => {
+  const log = await readJson(CLIENT_LOG_FILE, []);
+  const limit = Math.min(Number(req.query.limit) || 300, MAX_CLIENT_LOG_ENTRIES);
+  res.json(log.slice(-limit));
+});
+app.delete("/api/client-log", requireAuth, async (_req, res) => { await writeJson(CLIENT_LOG_FILE, []); res.json({ ok: true }); });
 
 // --- admin: achievers ---
 app.get("/api/achievers", requireAuth, async (req, res) => {
