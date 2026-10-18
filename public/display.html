@@ -186,6 +186,12 @@
   .layer.show { opacity: 1; }
   .layer.instant { transition: none; }
   .layer img, .layer video { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
+  /* Instagram posts are 4:5, so on a 16:9 TV "contain" leaves most of the screen black. Fill the gap
+     with a blown-up, blurred copy of the same image — the picture still shows uncropped on top. */
+  .layer .fill { position: absolute; inset: 0; overflow: hidden; background: #000; }
+  .layer .fill img.bg { position: absolute; inset: -6%; width: 112%; height: 112%; object-fit: cover;
+    filter: blur(28px) brightness(.45) saturate(1.2); }
+  .layer .fill img.fg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: none; }
   /* REVERTED: forcing a 3D compositing layer (translateZ(0)/will-change) on a hardware-decoded <video>
      is the textbook way to get a solid-black video on Android WebView — the hardware overlay surface
      can't participate in a 3D-transformed layer, so it paints nothing and the element's own black
@@ -419,6 +425,23 @@
       el.src = item.url;
       el.alt = "";
       el.decoding = "async";
+      el.className = "fg";
+      // Blurred copy behind it so a portrait post doesn't leave two thirds of the TV black. The
+      // backdrop is decorative only — waitReady still watches the foreground image.
+      const fill = document.createElement("div");
+      fill.className = "fill";
+      const bg = document.createElement("img");
+      bg.src = item.url;
+      bg.alt = "";
+      bg.decoding = "async";
+      bg.className = "bg";
+      fill.append(bg, el);
+      wrap.appendChild(fill);
+      const capImg = document.createElement("div");
+      capImg.className = "caption";
+      capImg.textContent = item.caption || "";
+      wrap.appendChild(capImg);
+      return { wrap, el };
     }
     const cap = document.createElement("div");
     cap.className = "caption";
