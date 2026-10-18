@@ -3,6 +3,7 @@ data/uploads/*
 !data/uploads/.gitkeep
 data/media.json
 data/settings.json
+data/client-log.json
 .env
 data/meta/
 data/auth.json
