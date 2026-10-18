@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import * as metaGraph from "./meta/graph.js";
 import * as metaAds from "./meta/ads.js";
 import * as metaSnapshot from "./meta/snapshot.js";
+import { BOARDS, fetchBoards } from "./coins/leaderboards.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -43,6 +44,13 @@ const DEFAULT_SETTINGS = {
   shuffle: false,
   refreshInterval: 30, // seconds between player checks for new media
   contact: "qlasslearning.com · +91 90310 03985",
+  // Qlass Coins leaderboard banners, read live from the rewards database.
+  boards: {
+    enabled: true,
+    show: ["coins", "dppSubmissions", "dppScores", "attendance"],
+    duration: 14,     // seconds per board — longer than an achiever card, there's more to read
+    every: 4,         // insert one board after every N uploaded items
+  },
   achievers: {
     enabled: true,
     sheetUrl: process.env.RESULTS_SHEET_URL || "https://docs.google.com/spreadsheets/d/1uPrXEi93HPhphqgdwRY2HcJxD7WgDQFOaXGVeZCpR-0/edit?gid=1634670191",
@@ -58,7 +66,9 @@ const DEFAULT_SETTINGS = {
 };
 const loadSettings = async () => {
   const s = await readJson(SETTINGS_FILE, {});
-  return { ...DEFAULT_SETTINGS, ...s, achievers: { ...DEFAULT_SETTINGS.achievers, ...(s.achievers || {}) } };
+  return { ...DEFAULT_SETTINGS, ...s,
+    achievers: { ...DEFAULT_SETTINGS.achievers, ...(s.achievers || {}) },
+    boards: { ...DEFAULT_SETTINGS.boards, ...(s.boards || {}) } };
 };
 
 async function readJson(file, fallback) {
@@ -292,6 +302,25 @@ async function getStudents(a, force = false) {
   }
   return sheetCache;
 }
+// Leaderboards change slowly (a day's worth of events at most), but /api/playlist is hit by the TV
+// every 30s. Cache for 10 minutes and keep serving the last good copy if the rewards DB is briefly
+// unreachable — a stale board on screen beats a gap in the rotation.
+let boardCache = { key: "", at: 0, boards: [], errors: [] };
+async function getBoards(b, force = false) {
+  if (!b.enabled) return { boards: [], errors: [] };
+  const key = (b.show || []).join(",");
+  if (!force && boardCache.key === key && Date.now() - boardCache.at < 600000) return boardCache;
+  try {
+    const { boards, errors } = await fetchBoards(b.show);
+    // Only replace the cache when we actually got something; otherwise keep the last good boards.
+    if (boards.length || !boardCache.boards.length) boardCache = { key, at: Date.now(), boards, errors };
+    else boardCache = { ...boardCache, key, at: Date.now(), errors };
+  } catch (e) {
+    boardCache = { ...boardCache, key, at: Date.now(), errors: [{ key: "all", error: e.message }] };
+  }
+  return boardCache;
+}
+
 const achieversFor = (a, students) => {
   const test = a.test || latestTest(students);
   return students.filter((s) => s.exam === test && (!a.cls || s.cls === a.cls) && s.pct >= a.minPercent && !a.hidden.includes(s.key)).sort((x, y) => y.pct - x.pct);
@@ -344,16 +373,21 @@ app.get("/api/playlist", async (_req, res) => {
     id: m.id, type: m.type, url: `/media/${m.file}`, duration: m.duration ?? null, caption: m.caption || "",
   }));
   const a = settings.achievers;
+  const bcfg = settings.boards;
   const ach = a.enabled ? achieversFor(a, (await getStudents(a)).students) : [];
+  const boards = (await getBoards(bcfg)).boards;
   const items = [];
   if (ach.length >= 2) items.push({ id: "recap", type: "recap", duration: a.recapDuration, students: ach, minPercent: a.minPercent });
   const every = Math.max(1, Number(a.every) || 2);
-  let ai = 0;
+  const bEvery = Math.max(1, Number(bcfg.every) || 4);
+  let ai = 0, bi = 0;
   uploads.forEach((m, i) => {
     items.push(m);
     if ((i + 1) % every === 0 && ai < ach.length) items.push({ id: "ach-" + ach[ai].key, type: "achiever", duration: a.duration, student: ach[ai++] });
+    if ((i + 1) % bEvery === 0 && bi < boards.length) items.push({ id: "board-" + boards[bi].key, type: "board", duration: bcfg.duration, board: boards[bi++] });
   });
   while (ai < ach.length) items.push({ id: "ach-" + ach[ai].key, type: "achiever", duration: a.duration, student: ach[ai++] });
+  while (bi < boards.length) items.push({ id: "board-" + boards[bi].key, type: "board", duration: bcfg.duration, board: boards[bi++] });
   // Public endpoint: don't leak the results-sheet URL, QLASS IDs, or internal grouping fields to anyone with this link.
   const publicStudent = (s) => {
     const { id, date, subjectRaw, sumM, sumT, inSubj, ...pub } = s;
@@ -499,6 +533,13 @@ app.put("/api/settings", requireAuth, async (req, res) => {
   if ("transition" in b) cur.transition = b.transition === "none" ? "none" : "fade";
   if ("videoSound" in b) cur.videoSound = Boolean(b.videoSound);
   if ("volume" in b) cur.volume = Math.min(Math.max(Number(b.volume) || 0, 0), 100);
+  if (b.boards && typeof b.boards === "object") {
+    const bd = cur.boards;
+    if ("enabled" in b.boards) bd.enabled = Boolean(b.boards.enabled);
+    if ("duration" in b.boards) bd.duration = Math.min(Math.max(Number(b.boards.duration) || 14, 4), 120);
+    if ("every" in b.boards) bd.every = Math.min(Math.max(Number(b.boards.every) || 4, 1), 50);
+    if (Array.isArray(b.boards.show)) bd.show = b.boards.show.filter((k) => k in BOARDS);
+  }
   if ("audioCompressor" in b) cur.audioCompressor = Boolean(b.audioCompressor);
   if ("shuffle" in b) cur.shuffle = Boolean(b.shuffle);
   if ("refreshInterval" in b) cur.refreshInterval = Math.min(Math.max(Number(b.refreshInterval) || 30, 5), 3600);

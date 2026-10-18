@@ -361,12 +361,13 @@
     cv.width = 1920; cv.height = 1080;
     wrap.appendChild(cv);
     const ctx = cv.getContext("2d");
-    const people = item.type === "recap" ? item.students : [item.student];
+    const people = item.type === "recap" ? item.students : item.type === "board" ? [] : [item.student];
     let raf = 0, t0 = 0;
     const opts = { logo: null, contact: playlist.settings.contact || "", minPct: item.minPercent };
     const paint = (t) => {
       ctx.clearRect(0, 0, 1920, 1080);
-      if (item.type === "recap") QlassArt.drawRecap(ctx, "landscape", people, { ...opts, t });
+      if (item.type === "board") QlassArt.drawBoard(ctx, "landscape", item.board, { ...opts, t });
+      else if (item.type === "recap") QlassArt.drawRecap(ctx, "landscape", people, { ...opts, t });
       else QlassArt.drawStudent(ctx, "landscape", people[0], { ...opts, t });
     };
     cv._ready = (async () => {
@@ -399,7 +400,7 @@
   }
 
   function buildElement(item, settings) {
-    if (item.type === "achiever" || item.type === "recap") return buildArt(item);
+    if (item.type === "achiever" || item.type === "recap" || item.type === "board") return buildArt(item);
     const wrap = document.createElement("div");
     wrap.style.cssText = "position:absolute;inset:0";
     let el;

@@ -228,6 +228,62 @@
     withA(ctx, A(o, 4.3), 20 * u, () => ctaStrip(ctx, W, H, u, o));
   }
 
+  // Qlass Coins leaderboards. Every board (coins, DPP, attendance) is the same ranked shape, so one
+  // renderer covers them all and each just carries its own title, unit and accent colour.
+  function drawBoardLandscape(ctx, W, H, b, o) {
+    const u = W / 1920;
+    const accent = b.accent || GOLD;
+    const x0 = 160 * u, x1 = 1760 * u, span = x1 - x0;
+    bg(ctx, W, H, 0.5, 0.5);
+    frame(ctx, W, H, u, A(o, 0.1, 0.9));
+    withA(ctx, A(o, 0.4), 20 * u, () => {
+      logo(ctx, o.logo, x0, 151 * u, 62 * u, 'left');
+      txt(ctx, (o.contact || '').toUpperCase(), x1, 151 * u, { size: 22 * u, w: 700, color: MUTED, ls: 4.4 * u, align: 'right' });
+    });
+    withA(ctx, A(o, 0.7), 30 * u, () => txt(ctx, String(b.subtitle || '').toUpperCase(), x0, 248 * u, { size: 23 * u, w: 800, color: accent, ls: 5.5 * u, align: 'left', maxW: span }));
+    withA(ctx, A(o, 0.9), 40 * u, () => txt(ctx, b.title || 'Leaderboard', x0, 326 * u, { size: 74 * u, fam: SERIF, italic: true, align: 'left', maxW: span }));
+
+    const rows = (b.rows || []).slice(0, 9);
+    if (!rows.length) {
+      withA(ctx, A(o, 1.2), 30 * u, () => txt(ctx, 'Standings refresh shortly', W / 2, 660 * u, { size: 46 * u, w: 600, color: SOFT }));
+      withA(ctx, A(o, 2.0), 20 * u, () => ctaStrip(ctx, W, H, u, o));
+      return;
+    }
+    // Rows stop above the CTA strip, which starts at H - 154u.
+    const top = 392 * u, bottom = 902 * u;
+    const rowH = Math.min(78 * u, (bottom - top) / rows.length);
+    rows.forEach((r, i) => {
+      const y = top + rowH * i + rowH / 2;
+      withA(ctx, A(o, 1.15 + i * 0.1), 24 * u, () => {
+        if (i % 2 === 0) {
+          ctx.save(); ctx.globalAlpha *= 0.12; ctx.fillStyle = '#ffffff';
+          rr(ctx, x0, y - rowH * 0.43, span, rowH * 0.86, 10 * u); ctx.fill(); ctx.restore();
+        }
+        ctx.save(); ctx.fillStyle = accent;
+        ctx.beginPath(); ctx.arc(x0 + 38 * u, y, Math.min(26 * u, rowH * 0.36), 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        txt(ctx, String(r.rank), x0 + 38 * u, y, { size: Math.min(28 * u, rowH * 0.38), w: 800, color: NAVY3 });
+        txt(ctx, r.name || '', x0 + 92 * u, y, { size: Math.min(46 * u, rowH * 0.62), w: 700, align: 'left', maxW: span * 0.48 });
+        txt(ctx, r.cls || '', x0 + span * 0.62, y, { size: Math.min(32 * u, rowH * 0.44), w: 600, color: SOFT, align: 'left', maxW: span * 0.15 });
+        const unit = b.unit || '';
+        const vSize = Math.min(52 * u, rowH * 0.68);
+        const uSize = Math.min(24 * u, rowH * 0.32);
+        const uw = unit ? measure(ctx, unit, 700, uSize, SANS) + 14 * u : 0;
+        txt(ctx, String(r.value), x1 - uw, y, { size: vSize, fam: SERIF, color: accent, align: 'right' });
+        if (unit) txt(ctx, unit, x1, y + 2 * u, { size: uSize, w: 700, color: MUTED, align: 'right' });
+      });
+    });
+    withA(ctx, A(o, 1.15 + rows.length * 0.1 + 0.3), 20 * u, () => ctaStrip(ctx, W, H, u, o));
+  }
+
+  function drawBoard(ctx, format, b, o = {}) {
+    BGP = o.bgPhoto || null;
+    const f = FORMATS[format] || FORMATS.landscape;
+    ctx.save();
+    ctx.globalAlpha = o.t == null ? 1 : ease((o.t * (o.speed || 1)) / 0.5);
+    drawBoardLandscape(ctx, f.w, f.h, b, o);
+    ctx.restore();
+  }
+
   function drawStudent(ctx, format, s, o = {}) {
     BGP = o.bgPhoto || null;
     const f = FORMATS[format] || FORMATS.portrait;
@@ -633,5 +689,5 @@
     return [...m.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]);
   }
 
-  window.QlassArt = { group, tests, MOODS, moodFor, scheduleMusic, playTrack, decodeTrack, findHook, endLineFor, FORMATS, REEL_SECONDS, ready, loadImage, drawStudent, drawRecap, reelStudent, reelRecap, record };
+  window.QlassArt = { group, tests, MOODS, moodFor, scheduleMusic, playTrack, decodeTrack, findHook, endLineFor, FORMATS, REEL_SECONDS, ready, loadImage, drawStudent, drawRecap, drawBoard, reelStudent, reelRecap, record };
 })();

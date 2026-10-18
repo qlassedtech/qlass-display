@@ -231,6 +231,9 @@
             <div class="field"><label>Video sound</label><select id="s_videoSound"><option value="0" ${!settings.videoSound ? "selected" : ""}>Muted</option><option value="1" ${settings.videoSound ? "selected" : ""}>On (if TV allows)</option></select></div>
             <div class="field"><label>Max volume (%)</label><input type="number" min="0" max="100" id="s_volume" value="${settings.volume}"></div>
             <div class="field"><label>Even out loud clips</label><select id="s_audioCompressor"><option value="1" ${settings.audioCompressor ? "selected" : ""}>On</option><option value="0" ${!settings.audioCompressor ? "selected" : ""}>Off</option></select></div>
+            <div class="field"><label>Qlass Coins banners</label><select id="s_boardsEnabled"><option value="1" ${settings.boards.enabled ? "selected" : ""}>On</option><option value="0" ${!settings.boards.enabled ? "selected" : ""}>Off</option></select></div>
+            <div class="field"><label>Seconds per banner</label><input type="number" min="4" max="120" id="s_boardsDuration" value="${settings.boards.duration}"></div>
+            <div class="field"><label>Banner after every N clips</label><input type="number" min="1" max="50" id="s_boardsEvery" value="${settings.boards.every}"></div>
             <div class="field"><label>TV checks for changes every (sec)</label><input type="number" min="5" id="s_refreshInterval" value="${settings.refreshInterval}"></div>
             <div class="field" style="justify-content:flex-end"><button id="saveSettings">Save settings</button></div>
           </div>
@@ -416,6 +419,11 @@
         shuffle: document.getElementById("s_shuffle").value === "1",
         videoSound: document.getElementById("s_videoSound").value === "1",
         volume: Number(document.getElementById("s_volume").value),
+        boards: {
+          enabled: document.getElementById("s_boardsEnabled").value === "1",
+          duration: Number(document.getElementById("s_boardsDuration").value),
+          every: Number(document.getElementById("s_boardsEvery").value),
+        },
         audioCompressor: document.getElementById("s_audioCompressor").value === "1",
         refreshInterval: document.getElementById("s_refreshInterval").value,
       }});
