@@ -8,3 +8,6 @@ data/client-log.json
 data/meta/
 data/auth.json
 .claude/scheduled_tasks.lock
+
+# Local GMB media staging — 38MB of photos/videos, not app code
+GMB Photos and Videos/
