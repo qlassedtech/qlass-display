@@ -22,6 +22,13 @@
      since these TVs can't be remotely inspected otherwise. -->
 <script>
 (function () {
+  // Now that every entry also ships to the server (see queueForServer/flushToServer below), the
+  // on-screen panel isn't needed for debugging day to day — read GET /api/client-log instead. Left
+  // as an opt-in (?debug=1 in the URL) rather than removed outright: partly to rule out, on this
+  // specific already-unstable device, whether an extra always-on fixed-position overlay stresses an
+  // already-degraded GPU compositor enough to affect other layers; partly because it's still handy
+  // to have on demand without a redeploy. Off by default so normal playback never pays for it.
+  var SHOW_ON_SCREEN = /[?&]debug=1(?:&|$)/.test(location.search);
   var panel = null, list = null;
   var COLORS = { ok: "#6f6", info: "#ccc", warn: "#fd5", error: "#f66" };
   var MAX_LINES = 50; // caps DOM growth over a day of uptime; oldest entries drop off the top
@@ -38,17 +45,20 @@
   }
   // level: "ok" (succeeded), "info" (in progress / neutral), "warn" (recovered from a problem),
   // "error" (failed outright). Every call appends a new timestamped line — nothing overwrites, so the
-  // full recent history is visible in one screenshot, not just the latest moment.
+  // full recent history is visible in one screenshot (when SHOW_ON_SCREEN is on), not just the latest
+  // moment; otherwise it's still captured via queueForServer below regardless.
   function log(level, label, detail) {
-    try {
-      ensurePanel();
-      var line = document.createElement("div");
-      line.style.color = COLORS[level] || COLORS.info;
-      line.textContent = "[" + new Date().toISOString().slice(11, 19) + "] " + label + (detail ? ": " + detail : "");
-      list.appendChild(line);
-      while (list.children.length > MAX_LINES) list.removeChild(list.firstChild);
-      panel.scrollTop = panel.scrollHeight;
-    } catch (e) { /* even the fallback failed; nothing more we can do */ }
+    if (SHOW_ON_SCREEN) {
+      try {
+        ensurePanel();
+        var line = document.createElement("div");
+        line.style.color = COLORS[level] || COLORS.info;
+        line.textContent = "[" + new Date().toISOString().slice(11, 19) + "] " + label + (detail ? ": " + detail : "");
+        list.appendChild(line);
+        while (list.children.length > MAX_LINES) list.removeChild(list.firstChild);
+        panel.scrollTop = panel.scrollHeight;
+      } catch (e) { /* even the fallback failed; nothing more we can do */ }
+    }
     queueForServer(level, label, detail);
   }
 
