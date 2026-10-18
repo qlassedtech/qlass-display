@@ -32,24 +32,33 @@ function getPool() {
 export const BOARDS = {
   coins: {
     title: "Qlass Coins Leaders",
-    subtitle: "Top earner in every class · last 30 days",
+    subtitle: "Highest balance in every class",
     unit: "coins",
     accent: "#C9A35C",
-    windowDays: 30,
+    windowDays: 0, // lifetime: students think in total balance, not a rolling window
+    // Balance, not earnings — it has to match the number the student sees in the rewards app, which
+    // is everything they have ever earned, less manual deductions and rewards actually handed over.
+    // Requested-but-not-yet-awarded redemptions are deliberately not subtracted: the coins are still
+    // theirs until the reward is given out.
     // One row per class rather than a global top-10, so younger classes aren't crowded out by
     // seniors who simply have more events to earn from.
     sql: `
       with earned as (
         select e.qlass_id, sum(e.coins_delta) as value
         from ledger_events e
-        where e.logged_at > now() - ($1 || ' days')::interval
-          and e.coins_delta > 0
         group by 1
+      ), spent as (
+        select qlass_id, sum(item_cost) as value
+        from redemptions where awarded_at is not null
+        group by 1
+      ), net as (
+        select earned.qlass_id, earned.value - coalesce(spent.value, 0) as value
+        from earned left join spent on spent.qlass_id = earned.qlass_id
       ), ranked as (
-        select s.class, s.name, earned.value,
-               row_number() over (partition by s.class order by earned.value desc, s.name) as rn
-        from earned join students s on s.qlass_id = earned.qlass_id
-        where s.name !~* $2
+        select s.class, s.name, net.value,
+               row_number() over (partition by s.class order by net.value desc, s.name) as rn
+        from net join students s on s.qlass_id = net.qlass_id
+        where s.name !~* $1
       )
       select class, name, value from ranked where rn = 1
       order by nullif(regexp_replace(class, '\\D', '', 'g'), '')::int desc nulls last
@@ -65,8 +74,8 @@ export const BOARDS = {
       select s.class, s.name, count(*)::int as value
       from ledger_events e join students s on s.qlass_id = e.qlass_id
       where e.event_type = 'Subject Wise DPP Submission'
-        and e.logged_at > now() - ($1 || ' days')::interval
-        and s.name !~* $2
+        and e.logged_at > now() - ($2 || ' days')::interval
+        and s.name !~* $1
       group by s.class, s.name
       order by value desc, s.name
       limit 8
@@ -82,10 +91,26 @@ export const BOARDS = {
       select s.class, s.name, count(*)::int as value
       from ledger_events e join students s on s.qlass_id = e.qlass_id
       where e.event_type = 'DPP 90% Marks'
-        and e.logged_at > now() - ($1 || ' days')::interval
-        and s.name !~* $2
+        and e.logged_at > now() - ($2 || ' days')::interval
+        and s.name !~* $1
       group by s.class, s.name
       order by value desc, s.name
+      limit 8
+    `,
+  },
+  rewards: {
+    title: "Rewards Claimed",
+    subtitle: "Coins turned into real rewards",
+    unit: "coins",
+    accent: "#B07FD4",
+    windowDays: 0,
+    // Shows the reward itself in place of a class, so the room sees what coins actually buy —
+    // that is the whole point of the scheme and the thing a leaderboard alone never communicates.
+    sql: `
+      select r.item as class, s.name, r.item_cost::int as value
+      from redemptions r join students s on s.qlass_id = r.qlass_id
+      where s.name !~* $1
+      order by r.item_cost desc, coalesce(r.awarded_at, r.flagged_at) desc nulls last, s.name
       limit 8
     `,
   },
@@ -99,8 +124,8 @@ export const BOARDS = {
       select s.class, s.name, count(distinct e.logged_at::date)::int as value
       from ledger_events e join students s on s.qlass_id = e.qlass_id
       where e.event_type in ('Daily Attendance', 'Attendance Perfect')
-        and e.logged_at > now() - ($1 || ' days')::interval
-        and s.name !~* $2
+        and e.logged_at > now() - ($2 || ' days')::interval
+        and s.name !~* $1
       group by s.class, s.name
       order by value desc, s.name
       limit 8
@@ -113,7 +138,9 @@ export async function fetchBoard(key) {
   if (!spec) throw new Error(`unknown board: ${key}`);
   const p = getPool();
   if (!p) throw new Error("QLASS_COINS_DATABASE_URL is not set");
-  const { rows } = await p.query(spec.sql, [String(spec.windowDays), TEST_NAME_RE.source]);
+  const params = [TEST_NAME_RE.source];
+  if (spec.sql.includes("$2")) params.push(String(spec.windowDays));
+  const { rows } = await p.query(spec.sql, params);
   return {
     key,
     title: spec.title,
