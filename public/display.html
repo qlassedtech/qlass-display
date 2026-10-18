@@ -268,14 +268,29 @@
     }
 
     if (item.type === "video") {
+      // el.play() has no built-in timeout — on some TV WebViews its Promise never settles at all
+      // (neither resolves nor rejects), which used to freeze the entire display on this single
+      // await forever (nothing else runs after it until it does). Race it against a timer so a
+      // stuck play() is treated as a playback failure instead of hanging the whole loop.
+      const playOrTimeout = () => Promise.race([
+        el.play(),
+        sleep(6000).then(() => { throw new Error("play() timed out"); }),
+      ]);
       try {
-        await el.play();
+        await playOrTimeout();
       } catch (err) {
         // Autoplay with sound is blocked until a user gesture; fall back to muted.
-        if (!el.muted) { el.muted = true; try { await el.play(); } catch { /* handled below */ } }
+        if (!el.muted) {
+          el.muted = true;
+          try { await playOrTimeout(); } catch { /* still failing even muted; fall through */ }
+        }
         if (el.paused) {
-          userGestureNeeded = true;
-          tap.classList.add("show");
+          // This is unattended signage — nobody will tap a TV, so don't block forever waiting
+          // for a gesture. Skip this one item and move on; keep tap-to-resume as a bonus for the
+          // (rare) case someone actually does interact with the screen.
+          console.warn("video could not autoplay even muted; skipping", item.url);
+          next.innerHTML = "";
+          timer = setTimeout(showNext, 300);
           return;
         }
       }
