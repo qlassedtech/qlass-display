@@ -242,7 +242,8 @@
   function recapKicker(list, o) {
     const exams = [...new Set(list.map((a) => a.exam).filter(Boolean))];
     const cls = [...new Set(list.map((a) => a.cls).filter(Boolean))];
-    return ((exams.length === 1 ? exams[0] : 'Results') + (cls.length === 1 ? ` · ${cls[0]}` : '') + ` · ${o.minPct ?? 80}%+`).toUpperCase();
+    const minPct = o.minPct == null ? 80 : o.minPct;
+    return ((exams.length === 1 ? exams[0] : 'Results') + (cls.length === 1 ? ` · ${cls[0]}` : '') + ` · ${minPct}%+`).toUpperCase();
   }
   function drawRecap(ctx, format, list, o = {}) {
     BGP = o.bgPhoto || null;
