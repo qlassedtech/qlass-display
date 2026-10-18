@@ -8,58 +8,56 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Manrope:wght@500;600;700;800&display=swap">
 <!-- Written in plain ES5 (var/function, no arrow/template-literal/let/const) on purpose: this is the
      diagnostic net for TV browsers whose JS engine is too old to run the rest of the page, so it must
-     parse and run even when everything after it can't. Shows a visible on-screen message instead of a
-     silent black screen, since these TVs can't be remotely inspected otherwise. -->
+     parse and run even when everything after it can't. A single scrollable on-screen log — both
+     successes and failures, not just errors — so a photo of the TV is always enough to debug from,
+     since these TVs can't be remotely inspected otherwise. -->
 <script>
 (function () {
-  var box = null;
-  function ensureBox() {
-    if (box) return box;
-    box = document.createElement("div");
-    box.id = "diag";
-    box.style.cssText = "position:fixed;left:0;right:0;bottom:0;max-height:40%;overflow:auto;" +
-      "background:rgba(140,0,0,.92);color:#fff;font:14px/1.4 monospace;padding:10px 14px;z-index:999999;white-space:pre-wrap;";
-    (document.body || document.documentElement).appendChild(box);
-    return box;
+  var panel = null, list = null;
+  var COLORS = { ok: "#6f6", info: "#ccc", warn: "#fd5", error: "#f66" };
+  var MAX_LINES = 50; // caps DOM growth over a day of uptime; oldest entries drop off the top
+  function ensurePanel() {
+    if (panel) return panel;
+    panel = document.createElement("div");
+    panel.id = "qlog";
+    panel.style.cssText = "position:fixed;left:0;top:0;right:0;max-height:45%;overflow:auto;" +
+      "background:rgba(0,0,0,.6);font:12px/1.4 monospace;padding:4px 8px;z-index:999998;white-space:pre-wrap;";
+    list = document.createElement("div");
+    panel.appendChild(list);
+    (document.body || document.documentElement).appendChild(panel);
+    return panel;
   }
-  function report(label, detail) {
+  // level: "ok" (succeeded), "info" (in progress / neutral), "warn" (recovered from a problem),
+  // "error" (failed outright). Every call appends a new timestamped line — nothing overwrites, so the
+  // full recent history is visible in one screenshot, not just the latest moment.
+  function log(level, label, detail) {
     try {
-      var b = ensureBox();
+      ensurePanel();
       var line = document.createElement("div");
+      line.style.color = COLORS[level] || COLORS.info;
       line.textContent = "[" + new Date().toISOString().slice(11, 19) + "] " + label + (detail ? ": " + detail : "");
-      b.appendChild(line);
+      list.appendChild(line);
+      while (list.children.length > MAX_LINES) list.removeChild(list.firstChild);
+      panel.scrollTop = panel.scrollHeight;
     } catch (e) { /* even the fallback failed; nothing more we can do */ }
   }
   window.addEventListener("error", function (e) {
     var msg = (e && e.message) || "unknown error";
     var where = e && e.filename ? (e.filename.split("/").pop() + ":" + e.lineno) : "";
-    report("JS error", msg + (where ? " (" + where + ")" : ""));
+    log("error", "JS error", msg + (where ? " (" + where + ")" : ""));
   });
   window.addEventListener("unhandledrejection", function (e) {
     var reason = e && e.reason ? (e.reason.message || String(e.reason)) : "unknown";
-    report("Unhandled promise rejection", reason);
+    log("error", "Unhandled promise rejection", reason);
   });
   window.addEventListener("DOMContentLoaded", function () {
-    if (typeof window.QlassArt === "undefined") report("achiever-art.js did not load/run (QlassArt is undefined)");
-    if (typeof window.fetch !== "function") report("fetch() is not supported on this browser");
+    if (typeof window.QlassArt === "undefined") log("error", "achiever-art.js did not load/run (QlassArt is undefined)");
+    else log("ok", "achiever-art.js loaded");
+    if (typeof window.fetch !== "function") log("error", "fetch() is not supported on this browser");
   });
-  window.__qlassDiagReport = report;
-
-  // Always-on status line (not error-triggered) so a photo of a blank screen is still diagnostic —
-  // shows exactly what the page believes is happening right now, even when nothing has thrown.
-  var statusEl = null;
-  window.__qlassStatus = function (text) {
-    try {
-      if (!statusEl) {
-        statusEl = document.createElement("div");
-        statusEl.id = "qstatus";
-        statusEl.style.cssText = "position:fixed;left:0;top:0;color:#0f0;background:rgba(0,0,0,.55);" +
-          "font:12px/1.4 monospace;padding:4px 8px;z-index:999998;white-space:pre;";
-        (document.body || document.documentElement).appendChild(statusEl);
-      }
-      statusEl.textContent = "[" + new Date().toISOString().slice(11, 19) + "] " + text;
-    } catch (e) { /* nothing more we can do */ }
-  };
+  window.__qlassLog = log;
+  window.__qlassDiagReport = function (label, detail) { log("error", label, detail); }; // back-compat alias
+  window.__qlassStatus = function (text) { log("info", text); };                        // back-compat alias
 })();
 </script>
 <!-- Some TV browsers (still showing their address bar, or with buggy vh/vw support) size 100vh/100vw
@@ -86,12 +84,20 @@
   .layer.show { opacity: 1; }
   .layer.instant { transition: none; }
   .layer img, .layer video { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
-  /* Forces the video onto its own GPU compositing layer. Some Android TV WebViews decode video to a
-     separate hardware overlay that doesn't composite over regular page content unless promoted like
-     this — without it, audio plays but the frame itself silently never becomes visible. */
-  .layer video { transform: translateZ(0); -webkit-transform: translateZ(0); will-change: transform; }
-  .layer canvas { position: absolute; inset: 0; margin: auto; width: calc(var(--vw, 1vw) * 100); height: calc(var(--vw, 1vw) * 56.25);
-    max-width: calc(var(--vh, 1vh) * 177.78); max-height: calc(var(--vh, 1vh) * 100); display: block; }
+  /* REVERTED: forcing a 3D compositing layer (translateZ(0)/will-change) on a hardware-decoded <video>
+     is the textbook way to get a solid-black video on Android WebView — the hardware overlay surface
+     can't participate in a 3D-transformed layer, so it paints nothing and the element's own black
+     background shows through instead. Confirmed on-device: the status log showed "SHOWING" (the layer
+     genuinely became visible) while the video itself was solid black — consistent with this exact bug,
+     not a visibility/compositing problem, so the "fix" was actively counterproductive. Left un-promoted. */
+  /* Was a vw/vh-based 16:9 letterbox computed against this TV's viewport — left an unexplained black
+     gap on one side only (not the symmetric pillarboxing a real aspect mismatch would produce), which
+     points at this browser's viewport-unit math being unreliable rather than a genuine aspect-ratio
+     difference. img/video already just fill 100%/100% of .layer (which is itself pinned full-bleed via
+     position:fixed/inset:0 — plain percentages against that are NOT subject to the same mobile/TV
+     "visual vs layout viewport" confusion that vw/vh units are) and render correctly, so canvas now
+     matches that same simple approach instead of its own unit-dependent math. */
+  .layer canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   .layer .art { position: absolute; inset: 0; background: #08064F; }
   .caption { position: absolute; left: 0; right: 0; bottom: 0; padding: 2.5vh 4vw; color: #fff; font-size: 3.2vh;
     background: linear-gradient(transparent, rgba(0,0,0,.75)); text-shadow: 0 2px 8px rgba(0,0,0,.8); }
@@ -151,18 +157,20 @@
     order = playlist.settings.shuffle ? shuffled(n) : [...Array(n).keys()];
   }
 
-  let reportedFetchFailure = false;
+  let fetchWasFailing = false;
   async function fetchPlaylist() {
     try {
       const r = await fetch("/api/playlist", { cache: "no-store" });
       if (!r.ok) throw new Error(r.status);
-      return await r.json();
+      const data = await r.json();
+      if (fetchWasFailing) { fetchWasFailing = false; window.__qlassLog?.("ok", "Playlist fetch recovered"); }
+      return data;
     } catch (e) {
       console.warn("playlist fetch failed", e);
-      if (!reportedFetchFailure && window.__qlassDiagReport) {
-        reportedFetchFailure = true;
-        window.__qlassDiagReport("Playlist fetch keeps failing", e && e.message);
-      }
+      // Logged every time (not just once) now that it's a scrollable history instead of a single
+      // overwritten line — seeing how often/when this recurs is itself useful debugging signal.
+      fetchWasFailing = true;
+      window.__qlassLog?.("error", "Playlist fetch failed", e && e.message);
       return null;
     }
   }
@@ -174,6 +182,7 @@
     if (wasEmpty || pos >= order.length) pos = -1;
     emptyEl.hidden = p.items.length > 0;
     flash(p.items.length ? `Updated · ${p.items.length} item${p.items.length === 1 ? "" : "s"}` : "");
+    window.__qlassLog?.("ok", "Playlist applied", `${p.items.length} items, version ${p.version}`);
   }
 
   function flash(text) {
@@ -212,16 +221,24 @@
       else QlassArt.drawStudent(ctx, "landscape", people[0], { ...opts, t });
     };
     cv._ready = (async () => {
-      await QlassArt.ready();
-      if (!artLogo) artLogo = await QlassArt.loadImage("/assets/qlass-logo-white.png");
-      if (artBg === undefined) artBg = await QlassArt.loadImage("/assets/photos/classroom.jpg");
-      opts.logo = artLogo; opts.bgPhoto = artBg;
-      await Promise.race([
-        Promise.all(people.map(async (p) => { p.photo = await loadPhoto(p.photoUrl); })),
-        sleep(4000),
-      ]);
-      paint(0);
-      return true;
+      try {
+        await QlassArt.ready();
+        if (!artLogo) artLogo = await QlassArt.loadImage("/assets/qlass-logo-white.png");
+        if (artBg === undefined) artBg = await QlassArt.loadImage("/assets/photos/classroom.jpg");
+        opts.logo = artLogo; opts.bgPhoto = artBg;
+        await Promise.race([
+          Promise.all(people.map(async (p) => { p.photo = await loadPhoto(p.photoUrl); })),
+          sleep(4000),
+        ]);
+        paint(0);
+        window.__qlassLog?.("ok", `Canvas painted (${item.type})`);
+        return true;
+      } catch (err) {
+        // Not re-thrown: waitReady's timeout already covers "never resolves", and a paint exception
+        // here would otherwise surface as a vague, hard-to-place unhandled rejection instead of this.
+        window.__qlassLog?.("error", `Canvas paint failed (${item.type})`, err?.message || String(err));
+        return false;
+      }
     })();
     cv._start = () => {
       t0 = performance.now();
@@ -258,20 +275,35 @@
     return { wrap, el };
   }
 
+  // Human-readable MediaError.code for video/audio — e.g. 3 (DECODE) vs 4 (SRC_NOT_SUPPORTED) point
+  // at very different root causes, so worth distinguishing on screen rather than just "error".
+  const MEDIA_ERROR_NAMES = { 1: "ABORTED", 2: "NETWORK", 3: "DECODE", 4: "SRC_NOT_SUPPORTED" };
+  function describeMediaError(el) {
+    const err = el.error;
+    if (!err) return "no MediaError set";
+    return (MEDIA_ERROR_NAMES[err.code] || `code ${err.code}`) + (err.message ? `: ${err.message}` : "");
+  }
+
   function waitReady(el, timeoutMs) {
     return new Promise((resolve) => {
       let done = false;
-      const finish = (ok) => { if (!done) { done = true; resolve(ok); } };
-      const t = setTimeout(() => finish(false), timeoutMs);
-      if (el.tagName === "CANVAS") { el._ready.then((ok) => { clearTimeout(t); finish(ok); }, () => { clearTimeout(t); finish(false); }); return; }
+      const finish = (ok, reason) => {
+        if (done) return;
+        done = true;
+        if (ok) window.__qlassLog?.("ok", `${el.tagName} ready`, reason);
+        else window.__qlassLog?.("error", `${el.tagName} not ready`, reason);
+        resolve(ok);
+      };
+      const t = setTimeout(() => finish(false, `timed out after ${timeoutMs}ms`), timeoutMs);
+      if (el.tagName === "CANVAS") { el._ready.then((ok) => { clearTimeout(t); finish(ok, ok ? "canvas painted" : "canvas paint failed"); }, (err) => { clearTimeout(t); finish(false, err?.message || String(err)); }); return; }
       if (el.tagName === "IMG") {
-        if (el.complete && el.naturalWidth) { clearTimeout(t); return finish(true); }
-        el.onload = () => { clearTimeout(t); finish(true); };
-        el.onerror = () => { clearTimeout(t); finish(false); };
+        if (el.complete && el.naturalWidth) { clearTimeout(t); return finish(true, el.src); }
+        el.onload = () => { clearTimeout(t); finish(true, el.src); };
+        el.onerror = () => { clearTimeout(t); finish(false, `image load error: ${el.src}`); };
       } else {
-        if (el.readyState >= 3) { clearTimeout(t); return finish(true); }
-        el.oncanplay = () => { clearTimeout(t); finish(true); };
-        el.onerror = () => { clearTimeout(t); finish(false); };
+        if (el.readyState >= 3) { clearTimeout(t); return finish(true, `readyState=${el.readyState} already`); }
+        el.oncanplay = () => { clearTimeout(t); finish(true, `canplay, readyState=${el.readyState}`); };
+        el.onerror = () => { clearTimeout(t); finish(false, describeMediaError(el)); };
       }
     });
   }
@@ -284,12 +316,21 @@
       timer = setTimeout(showNext, 5000);
       return;
     }
+    const prevPos = pos;
     pos = (pos + 1) % order.length;
     if (pos === 0 && playlist.settings.shuffle) rebuildOrder();
     const item = playlist.items[order[pos]];
-    if (!item) { timer = setTimeout(showNext, 500); return; }
+    // Logs every advance's bookkeeping explicitly — if pos ever stops incrementing normally, or
+    // order.length changes between calls (e.g. the playlist being rebuilt mid-rotation), it'll be
+    // directly visible here instead of inferred from which slide appears on screen.
+    const tag = `pos ${prevPos}->${pos} (order.length=${order.length}, items=${playlist.items.length})`;
+    if (!item) {
+      window.__qlassLog?.("error", `No item at this position`, tag);
+      timer = setTimeout(showNext, 500);
+      return;
+    }
 
-    window.__qlassStatus && window.__qlassStatus("item " + (pos + 1) + "/" + order.length + " type=" + item.type + " building...");
+    window.__qlassLog?.("info", `#${pos + 1}/${order.length} type=${item.type} building`, tag);
     const next = layers[1 - active];
     const cur = layers[active];
     const { wrap, el } = buildElement(item, playlist.settings);
@@ -302,18 +343,17 @@
     const instant = playlist.settings.transition === "none" || item.type === "video";
     layers.forEach((l) => l.classList.toggle("instant", instant));
 
-    window.__qlassStatus && window.__qlassStatus("item " + (pos + 1) + "/" + order.length + " type=" + item.type + " waiting ready...");
-    const ok = await waitReady(el, item.type === "video" ? 20000 : 15000);
+    const ok = await waitReady(el, item.type === "video" ? 20000 : 15000); // waitReady itself logs ok/error with the specific reason
     if (!ok) {
       console.warn("skipping unplayable item", item.url);
-      window.__qlassStatus && window.__qlassStatus("item " + (pos + 1) + "/" + order.length + " NOT READY, skipping");
+      window.__qlassLog?.("error", `#${pos + 1}/${order.length} skipped (not ready)`, item.url);
       next.innerHTML = "";
       timer = setTimeout(showNext, 300);
       return;
     }
 
     if (item.type === "video") {
-      window.__qlassStatus && window.__qlassStatus("item " + (pos + 1) + "/" + order.length + " ready, calling play()...");
+      window.__qlassLog?.("info", `#${pos + 1}/${order.length} ready, calling play()`);
       // el.play() has no built-in timeout — on some TV WebViews its Promise never settles at all
       // (neither resolves nor rejects), which used to freeze the entire display on this single
       // await forever (nothing else runs after it until it does). Race it against a timer so a
@@ -324,18 +364,25 @@
       ]);
       try {
         await playOrTimeout();
+        window.__qlassLog?.("ok", `#${pos + 1}/${order.length} play() succeeded`, `muted=${el.muted}`);
       } catch (err) {
+        window.__qlassLog?.("warn", `#${pos + 1}/${order.length} play() failed unmuted`, err?.message || String(err));
         // Autoplay with sound is blocked until a user gesture; fall back to muted.
         if (!el.muted) {
           el.muted = true;
-          try { await playOrTimeout(); } catch { /* still failing even muted; fall through */ }
+          try {
+            await playOrTimeout();
+            window.__qlassLog?.("ok", `#${pos + 1}/${order.length} play() succeeded muted (fallback)`);
+          } catch (err2) {
+            window.__qlassLog?.("error", `#${pos + 1}/${order.length} play() failed even muted`, err2?.message || String(err2));
+          }
         }
         if (el.paused) {
           // This is unattended signage — nobody will tap a TV, so don't block forever waiting
           // for a gesture. Skip this one item and move on; keep tap-to-resume as a bonus for the
           // (rare) case someone actually does interact with the screen.
           console.warn("video could not autoplay even muted; skipping", item.url);
-          window.__qlassStatus && window.__qlassStatus("item " + (pos + 1) + "/" + order.length + " play() failed even muted, skipping");
+          window.__qlassLog?.("error", `#${pos + 1}/${order.length} still paused, skipping`, describeMediaError(el));
           next.innerHTML = "";
           timer = setTimeout(showNext, 300);
           return;
@@ -348,17 +395,17 @@
     cur.classList.remove("show");
     active = 1 - active;
     lastShownAt = Date.now(); // watchdog below reloads the page if this stops advancing
-    window.__qlassStatus && window.__qlassStatus("item " + (pos + 1) + "/" + order.length + " type=" + item.type + " SHOWING (muted=" + (el.tagName === "VIDEO" ? el.muted : "n/a") + ")");
+    window.__qlassLog?.("ok", `#${pos + 1}/${order.length} type=${item.type} SHOWING`, el.tagName === "VIDEO" ? `muted=${el.muted}` : "");
     // Free the previous layer's media after the fade so the TV doesn't keep decoding it.
     setTimeout(() => { const c = cur.querySelector("canvas"); if (c && c._stop) c._stop(); const v = cur.querySelector("video"); if (v) { v.pause(); v.removeAttribute("src"); v.load(); } cur.innerHTML = ""; }, instant ? 0 : 900);
 
     if (item.type === "video") {
       const dur = Number(item.duration);
-      el.onended = () => showNext();
-      el.onerror = () => showNext();
+      el.onended = () => { window.__qlassLog?.("ok", `#${pos + 1}/${order.length} video ended normally`); showNext(); };
+      el.onerror = () => { window.__qlassLog?.("error", `#${pos + 1}/${order.length} video error during playback`, describeMediaError(el)); showNext(); };
       // Safety net: if 'ended' never fires (stalled stream), move on after the known length + grace.
       const fallbackMs = ((Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 600) + 15) * 1000;
-      timer = setTimeout(showNext, dur > 0 ? dur * 1000 : fallbackMs);
+      timer = setTimeout(() => { window.__qlassLog?.("warn", `#${pos + 1}/${order.length} video 'ended' never fired, advancing via fallback timer`); showNext(); }, dur > 0 ? dur * 1000 : fallbackMs);
     } else {
       const secs = Number(item.duration) > 0 ? Number(item.duration) : (playlist.settings.imageDuration || 10);
       timer = setTimeout(showNext, secs * 1000);
