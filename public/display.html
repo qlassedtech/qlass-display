@@ -6,7 +6,47 @@
 <title>Qlass Display</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Manrope:wght@500;600;700;800&display=swap">
-<script src="/achiever-art.js"></script>
+<!-- Written in plain ES5 (var/function, no arrow/template-literal/let/const) on purpose: this is the
+     diagnostic net for TV browsers whose JS engine is too old to run the rest of the page, so it must
+     parse and run even when everything after it can't. Shows a visible on-screen message instead of a
+     silent black screen, since these TVs can't be remotely inspected otherwise. -->
+<script>
+(function () {
+  var box = null;
+  function ensureBox() {
+    if (box) return box;
+    box = document.createElement("div");
+    box.id = "diag";
+    box.style.cssText = "position:fixed;left:0;right:0;bottom:0;max-height:40%;overflow:auto;" +
+      "background:rgba(140,0,0,.92);color:#fff;font:14px/1.4 monospace;padding:10px 14px;z-index:999999;white-space:pre-wrap;";
+    (document.body || document.documentElement).appendChild(box);
+    return box;
+  }
+  function report(label, detail) {
+    try {
+      var b = ensureBox();
+      var line = document.createElement("div");
+      line.textContent = "[" + new Date().toISOString().slice(11, 19) + "] " + label + (detail ? ": " + detail : "");
+      b.appendChild(line);
+    } catch (e) { /* even the fallback failed; nothing more we can do */ }
+  }
+  window.addEventListener("error", function (e) {
+    var msg = (e && e.message) || "unknown error";
+    var where = e && e.filename ? (e.filename.split("/").pop() + ":" + e.lineno) : "";
+    report("JS error", msg + (where ? " (" + where + ")" : ""));
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    var reason = e && e.reason ? (e.reason.message || String(e.reason)) : "unknown";
+    report("Unhandled promise rejection", reason);
+  });
+  window.addEventListener("DOMContentLoaded", function () {
+    if (typeof window.QlassArt === "undefined") report("achiever-art.js did not load/run (QlassArt is undefined)");
+    if (typeof window.fetch !== "function") report("fetch() is not supported on this browser");
+  });
+  window.__qlassDiagReport = report;
+})();
+</script>
+<script src="/achiever-art.js" onerror="window.__qlassDiagReport && window.__qlassDiagReport('Failed to load /achiever-art.js (network/script error)')"></script>
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
   .stage { position: fixed; inset: 0; background: #000; }
@@ -73,6 +113,7 @@
     order = playlist.settings.shuffle ? shuffled(n) : [...Array(n).keys()];
   }
 
+  let reportedFetchFailure = false;
   async function fetchPlaylist() {
     try {
       const r = await fetch("/api/playlist", { cache: "no-store" });
@@ -80,6 +121,10 @@
       return await r.json();
     } catch (e) {
       console.warn("playlist fetch failed", e);
+      if (!reportedFetchFailure && window.__qlassDiagReport) {
+        reportedFetchFailure = true;
+        window.__qlassDiagReport("Playlist fetch keeps failing", e && e.message);
+      }
       return null;
     }
   }
