@@ -376,18 +376,37 @@ app.get("/api/playlist", async (_req, res) => {
   const bcfg = settings.boards;
   const ach = a.enabled ? achieversFor(a, (await getStudents(a)).students) : [];
   const boards = (await getBoards(bcfg)).boards;
+  // Deal the deck by kind instead of walking the upload list and dropping extras in by modulo.
+  // Uploads arrive in batches, so that older scheme put every video together and every photo
+  // together — a reception sees one long block of clips, then a long block of stills. Dealing
+  // round-robin from separate piles keeps videos, photos, leaderboards and achiever cards
+  // alternating, so whenever someone looks up the screen has changed character.
+  const lanes = [
+    uploads.filter((m) => m.type === "video"),
+    uploads.filter((m) => m.type !== "video"),
+    boards.map((b) => ({ id: "board-" + b.key, type: "board", duration: bcfg.duration, board: b })),
+    ach.map((s) => ({ id: "ach-" + s.key, type: "achiever", duration: a.duration, student: s })),
+  ].filter((l) => l.length);
+
   const items = [];
   if (ach.length >= 2) items.push({ id: "recap", type: "recap", duration: a.recapDuration, students: ach, minPercent: a.minPercent });
-  const every = Math.max(1, Number(a.every) || 2);
-  const bEvery = Math.max(1, Number(bcfg.every) || 4);
-  let ai = 0, bi = 0;
-  uploads.forEach((m, i) => {
-    items.push(m);
-    if ((i + 1) % every === 0 && ai < ach.length) items.push({ id: "ach-" + ach[ai].key, type: "achiever", duration: a.duration, student: ach[ai++] });
-    if ((i + 1) % bEvery === 0 && bi < boards.length) items.push({ id: "board-" + boards[bi].key, type: "board", duration: bcfg.duration, board: boards[bi++] });
-  });
-  while (ai < ach.length) items.push({ id: "ach-" + ach[ai].key, type: "achiever", duration: a.duration, student: ach[ai++] });
-  while (bi < boards.length) items.push({ id: "board-" + boards[bi].key, type: "board", duration: bcfg.duration, board: boards[bi++] });
+  if (lanes.length) {
+    // Spread each lane evenly across the whole cycle, then order by that position. A lane with
+    // 16 videos and one with 4 boards both end up evenly distributed rather than front-loaded.
+    const slotted = [];
+    lanes.forEach((lane, li) => {
+      lane.forEach((item, i) => slotted.push({ item, pos: (i + 0.5) / lane.length, li }));
+    });
+    slotted.sort((x, y) => x.pos - y.pos || x.li - y.li);
+    // Two videos back to back is the one pairing worth avoiding: they are the longest items, so
+    // the screen would sit on the same kind of content for minutes. Push the later one along.
+    for (let i = 1; i < slotted.length; i++) {
+      if (slotted[i].item.type !== "video" || slotted[i - 1].item.type !== "video") continue;
+      const j = slotted.findIndex((s, k) => k > i && s.item.type !== "video");
+      if (j > -1) slotted.splice(i, 0, slotted.splice(j, 1)[0]);
+    }
+    slotted.forEach((s) => items.push(s.item));
+  }
   // Public endpoint: don't leak the results-sheet URL, QLASS IDs, or internal grouping fields to anyone with this link.
   const publicStudent = (s) => {
     const { id, date, subjectRaw, sumM, sumT, inSubj, ...pub } = s;
