@@ -567,7 +567,7 @@
       const stream = cv.captureStream(fps);
       let ac = null, dest = null;
       if (music) { ac = new (window.AudioContext || window.webkitAudioContext)(); ac.resume(); dest = ac.createMediaStreamDestination(); dest.stream.getAudioTracks().forEach((tr) => stream.addTrack(tr)); }
-      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 10_000_000, audioBitsPerSecond: 192_000 });
+      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 10000000, audioBitsPerSecond: 192000 });
       const chunks = []; rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
       rec.onstop = () => { if (ac) ac.close(); }; rec.addEventListener('stop', () => resolve({ blob: new Blob(chunks, { type: mime.split(';')[0] }), ext: mime.includes('mp4') ? 'mp4' : 'webm' }));
       rec.start(250);
