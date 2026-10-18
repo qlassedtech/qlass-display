@@ -311,6 +311,25 @@
   };
   ["click", "keydown", "touchstart"].forEach((ev) => document.addEventListener(ev, resume));
 
+  // Request fullscreen so the TV browser's own address bar hides itself — most browsers (including
+  // TV ones) only allow this from a user gesture, so try once on load (works on some TV browsers
+  // that treat remote "OK" / page focus as a gesture) and again on the first real click/key/touch.
+  function tryFullscreen() {
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+    if (req && !document.fullscreenElement) {
+      try {
+        const result = req.call(el);
+        // Modern browsers return a Promise that rejects without a user gesture (expected on first
+        // auto-attempt); older ones return undefined synchronously. Swallow both failure shapes —
+        // this is best-effort, and the gesture-triggered retry below is the real fallback.
+        if (result && typeof result.catch === "function") result.catch(() => {});
+      } catch { /* blocked until a user gesture; the listener below retries */ }
+    }
+  }
+  tryFullscreen();
+  ["click", "keydown", "touchstart"].forEach((ev) => document.addEventListener(ev, tryFullscreen, { once: true }));
+
   // Keep the screen awake where supported.
   async function keepAwake() {
     try {
