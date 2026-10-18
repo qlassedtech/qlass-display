@@ -536,6 +536,19 @@
   };
   ["click", "keydown", "touchstart"].forEach((ev) => document.addEventListener(ev, resume));
 
+  // A blocked-with-sound video falls back to muted and plays on, so resume() above never fires and
+  // nothing would ever unmute it — the deck runs silent for the rest of that slide. A gesture is also
+  // what grants the autoplay permission, so later videos get their sound back on their own retry.
+  const unmuteCurrent = () => {
+    const v = document.querySelector(".layer.show video");
+    if (!v || !v.muted || !playlist.settings.videoSound) return;
+    v.muted = false;
+    const p = v.play();
+    if (p && p.catch) p.catch(() => { v.muted = true; });
+    window.__qlassLog && window.__qlassLog("ok", "audio unlocked by user gesture");
+  };
+  ["click", "keydown", "touchstart"].forEach((ev) => document.addEventListener(ev, unmuteCurrent));
+
   // Request fullscreen so the TV browser's own address bar hides itself — most browsers (including
   // TV ones) only allow this from a user gesture, so try once on load (works on some TV browsers
   // that treat remote "OK" / page focus as a gesture) and again on the first real click/key/touch.
