@@ -229,6 +229,8 @@
             <div class="field"><label>Transition</label><select id="s_transition"><option value="fade" ${settings.transition === "fade" ? "selected" : ""}>Fade</option><option value="none" ${settings.transition === "none" ? "selected" : ""}>Cut</option></select></div>
             <div class="field"><label>Order</label><select id="s_shuffle"><option value="0" ${!settings.shuffle ? "selected" : ""}>As arranged below</option><option value="1" ${settings.shuffle ? "selected" : ""}>Shuffle</option></select></div>
             <div class="field"><label>Video sound</label><select id="s_videoSound"><option value="0" ${!settings.videoSound ? "selected" : ""}>Muted</option><option value="1" ${settings.videoSound ? "selected" : ""}>On (if TV allows)</option></select></div>
+            <div class="field"><label>Max volume (%)</label><input type="number" min="0" max="100" id="s_volume" value="${settings.volume}"></div>
+            <div class="field"><label>Even out loud clips</label><select id="s_audioCompressor"><option value="1" ${settings.audioCompressor ? "selected" : ""}>On</option><option value="0" ${!settings.audioCompressor ? "selected" : ""}>Off</option></select></div>
             <div class="field"><label>TV checks for changes every (sec)</label><input type="number" min="5" id="s_refreshInterval" value="${settings.refreshInterval}"></div>
             <div class="field" style="justify-content:flex-end"><button id="saveSettings">Save settings</button></div>
           </div>
@@ -413,6 +415,8 @@
         transition: document.getElementById("s_transition").value,
         shuffle: document.getElementById("s_shuffle").value === "1",
         videoSound: document.getElementById("s_videoSound").value === "1",
+        volume: Number(document.getElementById("s_volume").value),
+        audioCompressor: document.getElementById("s_audioCompressor").value === "1",
         refreshInterval: document.getElementById("s_refreshInterval").value,
       }});
       toast("Settings saved");

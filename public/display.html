@@ -253,6 +253,49 @@
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  // Reception-area audio, in two independent layers.
+  //  - volume is a hard ceiling set on the element itself; works on every browser, can't fail.
+  //  - the compressor pulls loud peaks down so one shouty reel doesn't startle the room, since
+  //    Instagram clips arrive mastered at wildly different levels.
+  // The compressor is gated on sound having already played unmuted once. Routing an element through
+  // an AudioContext *replaces* its own output, so wiring that up while the context is still suspended
+  // (autoplay not yet permitted) would silence the whole deck rather than merely skip the effect.
+  let audioCtx = null;
+  let soundConfirmed = false;
+  const compressed = typeof WeakSet === "function" ? new WeakSet() : null;
+
+  const volumeFraction = (settings) => {
+    const v = Number(settings.volume);
+    return Math.min(Math.max(Number.isFinite(v) ? v / 100 : 0.6, 0), 1);
+  };
+
+  function attachCompressor(el, settings) {
+    if (!settings.audioCompressor || !settings.videoSound || !soundConfirmed) return;
+    if (compressed && compressed.has(el)) return;
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    try {
+      if (!audioCtx) {
+        audioCtx = new Ctx();
+        if (audioCtx.state === "suspended" && audioCtx.resume) audioCtx.resume();
+      }
+      if (audioCtx.state !== "running") return;
+      const src = audioCtx.createMediaElementSource(el);
+      const comp = audioCtx.createDynamicsCompressor();
+      comp.threshold.value = -28; // start taming well below peak so typical speech/music is caught
+      comp.knee.value = 30;
+      comp.ratio.value = 12;
+      comp.attack.value = 0.003;
+      comp.release.value = 0.25;
+      src.connect(comp);
+      comp.connect(audioCtx.destination);
+      if (compressed) compressed.add(el);
+      window.__qlassLog && window.__qlassLog("ok", "audio compressor attached");
+    } catch (e) {
+      window.__qlassLog && window.__qlassLog("warn", "audio compressor unavailable", (e && e.message) || "");
+    }
+  }
+
   function shuffled(n) {
     const a = [...Array(n).keys()];
     for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
@@ -368,6 +411,8 @@
       el.playsInline = true;
       el.preload = "auto";
       el.setAttribute("playsinline", "");
+      el.volume = volumeFraction(settings);
+      attachCompressor(el, settings);
     } else {
       el = document.createElement("img");
       el.src = item.url;
@@ -470,7 +515,10 @@
       ]);
       try {
         await playOrTimeout();
-        window.__qlassLog && window.__qlassLog("ok", `#${pos + 1}/${order.length} play() succeeded`, `muted=${el.muted}`);
+        // Proof that this browser permits audio, which is what makes it safe to route later videos
+        // through an AudioContext for the compressor. See attachCompressor above.
+        if (!el.muted) soundConfirmed = true;
+        window.__qlassLog && window.__qlassLog("ok", `#${pos + 1}/${order.length} play() succeeded`, `muted=${el.muted} vol=${el.volume}`);
       } catch (err) {
         window.__qlassLog && window.__qlassLog("warn", `#${pos + 1}/${order.length} play() failed unmuted`, (err && err.message) || String(err));
         // Autoplay with sound is blocked until a user gesture; fall back to muted.
@@ -543,9 +591,11 @@
     const v = document.querySelector(".layer.show video");
     if (!v || !v.muted || !playlist.settings.videoSound) return;
     v.muted = false;
+    v.volume = volumeFraction(playlist.settings);
     const p = v.play();
     if (p && p.catch) p.catch(() => { v.muted = true; });
-    window.__qlassLog && window.__qlassLog("ok", "audio unlocked by user gesture");
+    soundConfirmed = true;
+    window.__qlassLog && window.__qlassLog("ok", "audio unlocked by user gesture", `vol=${v.volume}`);
   };
   ["click", "keydown", "touchstart"].forEach((ev) => document.addEventListener(ev, unmuteCurrent));
 

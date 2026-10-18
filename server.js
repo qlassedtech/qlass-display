@@ -38,6 +38,8 @@ const DEFAULT_SETTINGS = {
   imageDuration: 10,   // seconds per photo
   transition: "fade",  // fade | none
   videoSound: false,   // TVs block unmuted autoplay; keep muted unless the TV browser allows it
+  volume: 60,          // percent ceiling — this plays in a reception area, so never full blast
+  audioCompressor: true, // evens out the loudness gap between reels so no one clip startles the room
   shuffle: false,
   refreshInterval: 30, // seconds between player checks for new media
   contact: "qlasslearning.com · +91 90310 03985",
@@ -360,6 +362,7 @@ app.get("/api/playlist", async (_req, res) => {
   const publicItems = items.map((it) => it.student ? { ...it, student: publicStudent(it.student) }
     : it.students ? { ...it, students: it.students.map(publicStudent) } : it);
   const publicSettings = { imageDuration: settings.imageDuration, transition: settings.transition, videoSound: settings.videoSound,
+    volume: settings.volume, audioCompressor: settings.audioCompressor,
     shuffle: settings.shuffle, refreshInterval: settings.refreshInterval, contact: settings.contact };
   const version = crypto.createHash("md5").update(JSON.stringify({ items: publicItems, settings: publicSettings })).digest("hex");
   res.setHeader("Cache-Control", "no-store");
@@ -495,6 +498,8 @@ app.put("/api/settings", requireAuth, async (req, res) => {
   if ("imageDuration" in b) cur.imageDuration = Math.min(Math.max(Number(b.imageDuration) || 10, 1), 3600);
   if ("transition" in b) cur.transition = b.transition === "none" ? "none" : "fade";
   if ("videoSound" in b) cur.videoSound = Boolean(b.videoSound);
+  if ("volume" in b) cur.volume = Math.min(Math.max(Number(b.volume) || 0, 0), 100);
+  if ("audioCompressor" in b) cur.audioCompressor = Boolean(b.audioCompressor);
   if ("shuffle" in b) cur.shuffle = Boolean(b.shuffle);
   if ("refreshInterval" in b) cur.refreshInterval = Math.min(Math.max(Number(b.refreshInterval) || 30, 5), 3600);
   if ("contact" in b) cur.contact = String(b.contact).slice(0, 120);
