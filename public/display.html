@@ -112,6 +112,32 @@
     else log("ok", "achiever-art.js loaded");
     if (typeof window.fetch !== "function") log("error", "fetch() is not supported on this browser");
   });
+  // Logged once per session so the log history says which screen each session came from — otherwise
+  // a TV session and a phone session opened to check on it are indistinguishable in the same stream.
+  function describeDevice() {
+    var ua = navigator.userAgent || "";
+    var kind = "desktop/laptop";
+    if (/\bTV\b|SmartTV|Tizen|Web0S|webOS|NetCast|HbbTV|BRAVIA|AFT[A-Z]|GoogleTV|Android TV|CrKey/i.test(ua)) kind = "TV";
+    else if (/iPad|Tablet|Silk|(Android(?!.*Mobile))/i.test(ua)) kind = "tablet";
+    else if (/Mobi|iPhone|iPod|Android.*Mobile|Windows Phone/i.test(ua)) kind = "mobile";
+    var os = "unknown OS";
+    if (/Tizen/i.test(ua)) os = "Tizen (Samsung)";
+    else if (/Web0S|webOS/i.test(ua)) os = "webOS (LG)";
+    else if (/Android/i.test(ua)) os = "Android";
+    else if (/iPhone|iPad|iPod/i.test(ua)) os = "iOS";
+    else if (/Mac OS X/i.test(ua)) os = "macOS";
+    else if (/Windows/i.test(ua)) os = "Windows";
+    else if (/Linux/i.test(ua)) os = "Linux";
+    var m = /(?:Chrome|CriOS)\/(\d+)/.exec(ua) || /Version\/(\d+).*Safari/.exec(ua) || /Firefox\/(\d+)/.exec(ua);
+    var browser = (/Firefox/i.test(ua) ? "Firefox" : (/Chrome|CriOS/i.test(ua) ? "Chrome" : (/Safari/i.test(ua) ? "Safari" : "other")));
+    if (m) browser += " " + m[1];
+    var screenSize = (window.screen ? window.screen.width + "x" + window.screen.height : "?");
+    var viewport = window.innerWidth + "x" + window.innerHeight;
+    var touch = ("ontouchstart" in window || (navigator.maxTouchPoints || 0) > 0) ? "touch" : "no-touch";
+    return kind + " | " + os + " | " + browser + " | screen " + screenSize + " @" + (window.devicePixelRatio || 1) + "x | viewport " + viewport + " | " + touch + " | " + ua;
+  }
+  try { log("info", "DEVICE", describeDevice()); } catch (e) { log("warn", "DEVICE detect failed", (e && e.message) || ""); }
+
   window.__qlassLog = log;
   window.__qlassDiagReport = function (label, detail) { log("error", label, detail); }; // back-compat alias
   window.__qlassStatus = function (text) { log("info", text); };                        // back-compat alias
@@ -221,6 +247,9 @@
   let pendingUpdate = null;
   let userGestureNeeded = false;
   let lastShownAt = Date.now(); // updated every time a slide actually becomes visible; see watchdog below
+  // When the current slide should have handed over by itself. Set from the item's real length, because
+  // a 160s video is not a stall — a fixed threshold reloaded mid-playback and the deck never advanced.
+  let stallDeadline = Date.now() + 180000;
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -487,9 +516,12 @@
       // gap is what the 2-min watchdog has been rescuing from) it meant up to 10 minutes stuck on one
       // black, frozen slide every single cycle. These are short reels; 45s is already generous.
       const fallbackMs = ((Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 45) + 15) * 1000;
-      timer = setTimeout(() => { window.__qlassLog && window.__qlassLog("warn", `#${pos + 1}/${order.length} video 'ended' never fired, advancing via fallback timer`); showNext(); }, dur > 0 ? dur * 1000 : fallbackMs);
+      const advanceMs = dur > 0 ? dur * 1000 : fallbackMs;
+      stallDeadline = Date.now() + advanceMs + 60000;
+      timer = setTimeout(() => { window.__qlassLog && window.__qlassLog("warn", `#${pos + 1}/${order.length} video 'ended' never fired, advancing via fallback timer`); showNext(); }, advanceMs);
     } else {
       const secs = Number(item.duration) > 0 ? Number(item.duration) : (playlist.settings.imageDuration || 10);
+      stallDeadline = Date.now() + secs * 1000 + 60000;
       timer = setTimeout(showNext, secs * 1000);
     }
   }
@@ -543,13 +575,13 @@
   // pipeline — a stuck video, a canvas draw error, whatever), force a full reload instead of staying
   // dark indefinitely. Skipped while the playlist is genuinely empty (that's a real, valid state, not
   // a stall) — only applies once there's content that should be rotating.
-  const WATCHDOG_STALL_MS = 120000;
   setInterval(() => {
     // Proves the JS loop itself is still alive even when there's legitimately nothing to show (an
     // empty playlist) — only the slide-stall check below needs actual content to judge against.
     window.__qlassAlive && window.__qlassAlive();
-    if (playlist.items.length > 0 && Date.now() - lastShownAt > WATCHDOG_STALL_MS) {
-      window.__qlassDiagReport && window.__qlassDiagReport("Watchdog: no slide shown in 2 min, reloading");
+    if (playlist.items.length > 0 && Date.now() > stallDeadline) {
+      const stuckFor = Math.round((Date.now() - lastShownAt) / 1000);
+      window.__qlassDiagReport && window.__qlassDiagReport("Watchdog: slide overran its own length by 60s+ (" + stuckFor + "s on screen), reloading");
       location.reload();
     }
   }, 20000);
