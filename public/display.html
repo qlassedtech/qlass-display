@@ -67,15 +67,24 @@
     if (!pending.length || typeof fetch !== "function") return;
     var batch = pending;
     pending = [];
-    fetch("/api/client-log", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session: sessionId, entries: batch }),
-      keepalive: true,
-    }).catch(function () {
-      // Put it back (ahead of anything logged since) rather than lose it; still capped above.
+    // fetch() itself is wrapped in try/catch, not just its returned promise — on some old/broken
+    // fetch implementations an unrecognized or unsupported options-object member (keepalive was
+    // dropped for exactly this reason) can make the call throw synchronously instead of rejecting,
+    // which .catch() alone would never see.
+    try {
+      fetch("/api/client-log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session: sessionId, entries: batch }),
+      }).then(function (r) {
+        if (!r.ok) pending = batch.concat(pending); // server rejected it; retry next tick
+      }, function () {
+        // Put it back (ahead of anything logged since) rather than lose it; still capped above.
+        pending = batch.concat(pending);
+      });
+    } catch (e) {
       pending = batch.concat(pending);
-    });
+    }
   }
   setInterval(flushToServer, 5000);
   window.addEventListener("pagehide", flushToServer);
