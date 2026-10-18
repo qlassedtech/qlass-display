@@ -46,6 +46,22 @@
   window.__qlassDiagReport = report;
 })();
 </script>
+<!-- Some TV browsers (still showing their address bar, or with buggy vh/vw support) size 100vh/100vw
+     against the wrong box, cutting off the bottom of the canvas slides. Measure the real viewport in
+     JS instead and expose it as --vw/--vh so the canvas sizing rule below uses the actual visible
+     area. Also plain ES5 so it runs even if nothing else can parse. -->
+<script>
+(function () {
+  function setViewportVars() {
+    var root = document.documentElement;
+    root.style.setProperty("--vw", (window.innerWidth / 100) + "px");
+    root.style.setProperty("--vh", (window.innerHeight / 100) + "px");
+  }
+  setViewportVars();
+  window.addEventListener("resize", setViewportVars);
+  window.addEventListener("orientationchange", setViewportVars);
+})();
+</script>
 <script src="/achiever-art.js" onerror="window.__qlassDiagReport && window.__qlassDiagReport('Failed to load /achiever-art.js (network/script error)')"></script>
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
@@ -54,7 +70,8 @@
   .layer.show { opacity: 1; }
   .layer.instant { transition: none; }
   .layer img, .layer video { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
-  .layer canvas { position: absolute; inset: 0; margin: auto; width: 100vw; height: 56.25vw; max-width: 177.78vh; max-height: 100vh; display: block; }
+  .layer canvas { position: absolute; inset: 0; margin: auto; width: calc(var(--vw, 1vw) * 100); height: calc(var(--vw, 1vw) * 56.25);
+    max-width: calc(var(--vh, 1vh) * 177.78); max-height: calc(var(--vh, 1vh) * 100); display: block; }
   .layer .art { position: absolute; inset: 0; background: #08064F; }
   .caption { position: absolute; left: 0; right: 0; bottom: 0; padding: 2.5vh 4vw; color: #fff; font-size: 3.2vh;
     background: linear-gradient(transparent, rgba(0,0,0,.75)); text-shadow: 0 2px 8px rgba(0,0,0,.8); }
@@ -100,6 +117,7 @@
   let timer = null;
   let pendingUpdate = null;
   let userGestureNeeded = false;
+  let lastShownAt = Date.now(); // updated every time a slide actually becomes visible; see watchdog below
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -300,6 +318,7 @@
     next.classList.add("show");
     cur.classList.remove("show");
     active = 1 - active;
+    lastShownAt = Date.now(); // watchdog below reloads the page if this stops advancing
     // Free the previous layer's media after the fade so the TV doesn't keep decoding it.
     setTimeout(() => { const c = cur.querySelector("canvas"); if (c && c._stop) c._stop(); const v = cur.querySelector("video"); if (v) { v.pause(); v.removeAttribute("src"); v.load(); } cur.innerHTML = ""; }, instant ? 0 : 900);
 
@@ -359,6 +378,19 @@
 
   // Reload the whole page once a day to shake off memory leaks in TV browsers.
   setTimeout(() => location.reload(), 24 * 3600 * 1000);
+
+  // Self-healing watchdog: this is unattended signage, so nobody is around to notice a stuck slide
+  // and press reload. If a slide should have advanced by now but hasn't (any hang, anywhere in the
+  // pipeline — a stuck video, a canvas draw error, whatever), force a full reload instead of staying
+  // dark indefinitely. Skipped while the playlist is genuinely empty (that's a real, valid state, not
+  // a stall) — only applies once there's content that should be rotating.
+  const WATCHDOG_STALL_MS = 120000;
+  setInterval(() => {
+    if (playlist.items.length > 0 && Date.now() - lastShownAt > WATCHDOG_STALL_MS) {
+      window.__qlassDiagReport && window.__qlassDiagReport("Watchdog: no slide shown in 2 min, reloading");
+      location.reload();
+    }
+  }, 20000);
 
   (async () => {
     keepAwake();
