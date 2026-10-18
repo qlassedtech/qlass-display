@@ -472,7 +472,11 @@
       el.onended = () => { window.__qlassLog && window.__qlassLog("ok", `#${pos + 1}/${order.length} video ended normally`); showNext(); };
       el.onerror = () => { window.__qlassLog && window.__qlassLog("error", `#${pos + 1}/${order.length} video error during playback`, describeMediaError(el)); showNext(); };
       // Safety net: if 'ended' never fires (stalled stream), move on after the known length + grace.
-      const fallbackMs = ((Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 600) + 15) * 1000;
+      // The "duration unknown" fallback used to be 600s — fine for a legitimate long video still
+      // resolving its metadata, but on a device where video is actually broken (confirmed: this exact
+      // gap is what the 2-min watchdog has been rescuing from) it meant up to 10 minutes stuck on one
+      // black, frozen slide every single cycle. These are short reels; 45s is already generous.
+      const fallbackMs = ((Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 45) + 15) * 1000;
       timer = setTimeout(() => { window.__qlassLog && window.__qlassLog("warn", `#${pos + 1}/${order.length} video 'ended' never fired, advancing via fallback timer`); showNext(); }, dur > 0 ? dur * 1000 : fallbackMs);
     } else {
       const secs = Number(item.duration) > 0 ? Number(item.duration) : (playlist.settings.imageDuration || 10);
