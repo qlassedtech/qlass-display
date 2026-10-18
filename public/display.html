@@ -58,6 +58,25 @@
   window.__qlassLog = log;
   window.__qlassDiagReport = function (label, detail) { log("error", label, detail); }; // back-compat alias
   window.__qlassStatus = function (text) { log("info", text); };                        // back-compat alias
+
+  // Dead-man's switch, independent of the main script below. The watchdog that lives in the main
+  // script can only rescue a hang that happens *after* that script starts running — it does nothing
+  // for a parse-time SyntaxError (like today's: the whole inline script block fails as a unit, so
+  // nothing in it, including its own watchdog, ever executes). This one lives here instead, in the
+  // same always-parses ES5 block as the log panel, so it survives exactly the failure mode that
+  // matters most. The main script calls window.__qlassAlive() to prove it's actually running and
+  // defer this; if that call stops arriving — whether the script never started, or started and then
+  // hung — this fires on its own and reloads.
+  var aliveTimer = null;
+  function armDeadMansSwitch(ms) {
+    clearTimeout(aliveTimer);
+    aliveTimer = setTimeout(function () {
+      log("error", "Dead-man's switch: no sign of life from the main script in " + (ms / 1000) + "s, reloading");
+      location.reload();
+    }, ms);
+  }
+  window.__qlassAlive = function () { armDeadMansSwitch(150000); }; // 2.5 min — generous vs. the main watchdog's own 2 min
+  armDeadMansSwitch(60000); // first check is tighter: the main script should call __qlassAlive() within 60s of boot
 })();
 </script>
 <!-- Some TV browsers (still showing their address bar, or with buggy vh/vw support) size 100vh/100vw
@@ -130,6 +149,7 @@
 
 <script>
 (() => {
+  window.__qlassAlive && window.__qlassAlive(); // proves this script actually started parsing/running — see the dead-man's switch above
   const layers = [document.getElementById("a"), document.getElementById("b")];
   const emptyEl = document.getElementById("empty");
   const badge = document.getElementById("badge");
@@ -163,14 +183,14 @@
       const r = await fetch("/api/playlist", { cache: "no-store" });
       if (!r.ok) throw new Error(r.status);
       const data = await r.json();
-      if (fetchWasFailing) { fetchWasFailing = false; window.__qlassLog?.("ok", "Playlist fetch recovered"); }
+      if (fetchWasFailing) { fetchWasFailing = false; window.__qlassLog && window.__qlassLog("ok", "Playlist fetch recovered"); }
       return data;
     } catch (e) {
       console.warn("playlist fetch failed", e);
       // Logged every time (not just once) now that it's a scrollable history instead of a single
       // overwritten line — seeing how often/when this recurs is itself useful debugging signal.
       fetchWasFailing = true;
-      window.__qlassLog?.("error", "Playlist fetch failed", e && e.message);
+      window.__qlassLog && window.__qlassLog("error", "Playlist fetch failed", e && e.message);
       return null;
     }
   }
@@ -182,7 +202,7 @@
     if (wasEmpty || pos >= order.length) pos = -1;
     emptyEl.hidden = p.items.length > 0;
     flash(p.items.length ? `Updated · ${p.items.length} item${p.items.length === 1 ? "" : "s"}` : "");
-    window.__qlassLog?.("ok", "Playlist applied", `${p.items.length} items, version ${p.version}`);
+    window.__qlassLog && window.__qlassLog("ok", "Playlist applied", `${p.items.length} items, version ${p.version}`);
   }
 
   function flash(text) {
@@ -231,12 +251,12 @@
           sleep(4000),
         ]);
         paint(0);
-        window.__qlassLog?.("ok", `Canvas painted (${item.type})`);
+        window.__qlassLog && window.__qlassLog("ok", `Canvas painted (${item.type})`);
         return true;
       } catch (err) {
         // Not re-thrown: waitReady's timeout already covers "never resolves", and a paint exception
         // here would otherwise surface as a vague, hard-to-place unhandled rejection instead of this.
-        window.__qlassLog?.("error", `Canvas paint failed (${item.type})`, err?.message || String(err));
+        window.__qlassLog && window.__qlassLog("error", `Canvas paint failed (${item.type})`, (err && err.message) || String(err));
         return false;
       }
     })();
@@ -290,12 +310,12 @@
       const finish = (ok, reason) => {
         if (done) return;
         done = true;
-        if (ok) window.__qlassLog?.("ok", `${el.tagName} ready`, reason);
-        else window.__qlassLog?.("error", `${el.tagName} not ready`, reason);
+        if (ok) window.__qlassLog && window.__qlassLog("ok", `${el.tagName} ready`, reason);
+        else window.__qlassLog && window.__qlassLog("error", `${el.tagName} not ready`, reason);
         resolve(ok);
       };
       const t = setTimeout(() => finish(false, `timed out after ${timeoutMs}ms`), timeoutMs);
-      if (el.tagName === "CANVAS") { el._ready.then((ok) => { clearTimeout(t); finish(ok, ok ? "canvas painted" : "canvas paint failed"); }, (err) => { clearTimeout(t); finish(false, err?.message || String(err)); }); return; }
+      if (el.tagName === "CANVAS") { el._ready.then((ok) => { clearTimeout(t); finish(ok, ok ? "canvas painted" : "canvas paint failed"); }, (err) => { clearTimeout(t); finish(false, (err && err.message) || String(err)); }); return; }
       if (el.tagName === "IMG") {
         if (el.complete && el.naturalWidth) { clearTimeout(t); return finish(true, el.src); }
         el.onload = () => { clearTimeout(t); finish(true, el.src); };
@@ -325,12 +345,12 @@
     // directly visible here instead of inferred from which slide appears on screen.
     const tag = `pos ${prevPos}->${pos} (order.length=${order.length}, items=${playlist.items.length})`;
     if (!item) {
-      window.__qlassLog?.("error", `No item at this position`, tag);
+      window.__qlassLog && window.__qlassLog("error", `No item at this position`, tag);
       timer = setTimeout(showNext, 500);
       return;
     }
 
-    window.__qlassLog?.("info", `#${pos + 1}/${order.length} type=${item.type} building`, tag);
+    window.__qlassLog && window.__qlassLog("info", `#${pos + 1}/${order.length} type=${item.type} building`, tag);
     const next = layers[1 - active];
     const cur = layers[active];
     const { wrap, el } = buildElement(item, playlist.settings);
@@ -346,14 +366,14 @@
     const ok = await waitReady(el, item.type === "video" ? 20000 : 15000); // waitReady itself logs ok/error with the specific reason
     if (!ok) {
       console.warn("skipping unplayable item", item.url);
-      window.__qlassLog?.("error", `#${pos + 1}/${order.length} skipped (not ready)`, item.url);
+      window.__qlassLog && window.__qlassLog("error", `#${pos + 1}/${order.length} skipped (not ready)`, item.url);
       next.innerHTML = "";
       timer = setTimeout(showNext, 300);
       return;
     }
 
     if (item.type === "video") {
-      window.__qlassLog?.("info", `#${pos + 1}/${order.length} ready, calling play()`);
+      window.__qlassLog && window.__qlassLog("info", `#${pos + 1}/${order.length} ready, calling play()`);
       // el.play() has no built-in timeout — on some TV WebViews its Promise never settles at all
       // (neither resolves nor rejects), which used to freeze the entire display on this single
       // await forever (nothing else runs after it until it does). Race it against a timer so a
@@ -364,17 +384,17 @@
       ]);
       try {
         await playOrTimeout();
-        window.__qlassLog?.("ok", `#${pos + 1}/${order.length} play() succeeded`, `muted=${el.muted}`);
+        window.__qlassLog && window.__qlassLog("ok", `#${pos + 1}/${order.length} play() succeeded`, `muted=${el.muted}`);
       } catch (err) {
-        window.__qlassLog?.("warn", `#${pos + 1}/${order.length} play() failed unmuted`, err?.message || String(err));
+        window.__qlassLog && window.__qlassLog("warn", `#${pos + 1}/${order.length} play() failed unmuted`, (err && err.message) || String(err));
         // Autoplay with sound is blocked until a user gesture; fall back to muted.
         if (!el.muted) {
           el.muted = true;
           try {
             await playOrTimeout();
-            window.__qlassLog?.("ok", `#${pos + 1}/${order.length} play() succeeded muted (fallback)`);
+            window.__qlassLog && window.__qlassLog("ok", `#${pos + 1}/${order.length} play() succeeded muted (fallback)`);
           } catch (err2) {
-            window.__qlassLog?.("error", `#${pos + 1}/${order.length} play() failed even muted`, err2?.message || String(err2));
+            window.__qlassLog && window.__qlassLog("error", `#${pos + 1}/${order.length} play() failed even muted`, (err2 && err2.message) || String(err2));
           }
         }
         if (el.paused) {
@@ -382,7 +402,7 @@
           // for a gesture. Skip this one item and move on; keep tap-to-resume as a bonus for the
           // (rare) case someone actually does interact with the screen.
           console.warn("video could not autoplay even muted; skipping", item.url);
-          window.__qlassLog?.("error", `#${pos + 1}/${order.length} still paused, skipping`, describeMediaError(el));
+          window.__qlassLog && window.__qlassLog("error", `#${pos + 1}/${order.length} still paused, skipping`, describeMediaError(el));
           next.innerHTML = "";
           timer = setTimeout(showNext, 300);
           return;
@@ -395,17 +415,18 @@
     cur.classList.remove("show");
     active = 1 - active;
     lastShownAt = Date.now(); // watchdog below reloads the page if this stops advancing
-    window.__qlassLog?.("ok", `#${pos + 1}/${order.length} type=${item.type} SHOWING`, el.tagName === "VIDEO" ? `muted=${el.muted}` : "");
+    window.__qlassAlive && window.__qlassAlive(); // also defers the independent dead-man's switch above
+    window.__qlassLog && window.__qlassLog("ok", `#${pos + 1}/${order.length} type=${item.type} SHOWING`, el.tagName === "VIDEO" ? `muted=${el.muted}` : "");
     // Free the previous layer's media after the fade so the TV doesn't keep decoding it.
     setTimeout(() => { const c = cur.querySelector("canvas"); if (c && c._stop) c._stop(); const v = cur.querySelector("video"); if (v) { v.pause(); v.removeAttribute("src"); v.load(); } cur.innerHTML = ""; }, instant ? 0 : 900);
 
     if (item.type === "video") {
       const dur = Number(item.duration);
-      el.onended = () => { window.__qlassLog?.("ok", `#${pos + 1}/${order.length} video ended normally`); showNext(); };
-      el.onerror = () => { window.__qlassLog?.("error", `#${pos + 1}/${order.length} video error during playback`, describeMediaError(el)); showNext(); };
+      el.onended = () => { window.__qlassLog && window.__qlassLog("ok", `#${pos + 1}/${order.length} video ended normally`); showNext(); };
+      el.onerror = () => { window.__qlassLog && window.__qlassLog("error", `#${pos + 1}/${order.length} video error during playback`, describeMediaError(el)); showNext(); };
       // Safety net: if 'ended' never fires (stalled stream), move on after the known length + grace.
       const fallbackMs = ((Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 600) + 15) * 1000;
-      timer = setTimeout(() => { window.__qlassLog?.("warn", `#${pos + 1}/${order.length} video 'ended' never fired, advancing via fallback timer`); showNext(); }, dur > 0 ? dur * 1000 : fallbackMs);
+      timer = setTimeout(() => { window.__qlassLog && window.__qlassLog("warn", `#${pos + 1}/${order.length} video 'ended' never fired, advancing via fallback timer`); showNext(); }, dur > 0 ? dur * 1000 : fallbackMs);
     } else {
       const secs = Number(item.duration) > 0 ? Number(item.duration) : (playlist.settings.imageDuration || 10);
       timer = setTimeout(showNext, secs * 1000);
@@ -463,6 +484,9 @@
   // a stall) — only applies once there's content that should be rotating.
   const WATCHDOG_STALL_MS = 120000;
   setInterval(() => {
+    // Proves the JS loop itself is still alive even when there's legitimately nothing to show (an
+    // empty playlist) — only the slide-stall check below needs actual content to judge against.
+    window.__qlassAlive && window.__qlassAlive();
     if (playlist.items.length > 0 && Date.now() - lastShownAt > WATCHDOG_STALL_MS) {
       window.__qlassDiagReport && window.__qlassDiagReport("Watchdog: no slide shown in 2 min, reloading");
       location.reload();
