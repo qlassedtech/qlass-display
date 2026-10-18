@@ -44,6 +44,22 @@
     if (typeof window.fetch !== "function") report("fetch() is not supported on this browser");
   });
   window.__qlassDiagReport = report;
+
+  // Always-on status line (not error-triggered) so a photo of a blank screen is still diagnostic —
+  // shows exactly what the page believes is happening right now, even when nothing has thrown.
+  var statusEl = null;
+  window.__qlassStatus = function (text) {
+    try {
+      if (!statusEl) {
+        statusEl = document.createElement("div");
+        statusEl.id = "qstatus";
+        statusEl.style.cssText = "position:fixed;left:0;top:0;color:#0f0;background:rgba(0,0,0,.55);" +
+          "font:12px/1.4 monospace;padding:4px 8px;z-index:999998;white-space:pre;";
+        (document.body || document.documentElement).appendChild(statusEl);
+      }
+      statusEl.textContent = "[" + new Date().toISOString().slice(11, 19) + "] " + text;
+    } catch (e) { /* nothing more we can do */ }
+  };
 })();
 </script>
 <!-- Some TV browsers (still showing their address bar, or with buggy vh/vw support) size 100vh/100vw
@@ -273,6 +289,7 @@
     const item = playlist.items[order[pos]];
     if (!item) { timer = setTimeout(showNext, 500); return; }
 
+    window.__qlassStatus && window.__qlassStatus("item " + (pos + 1) + "/" + order.length + " type=" + item.type + " building...");
     const next = layers[1 - active];
     const cur = layers[active];
     const { wrap, el } = buildElement(item, playlist.settings);
@@ -285,15 +302,18 @@
     const instant = playlist.settings.transition === "none" || item.type === "video";
     layers.forEach((l) => l.classList.toggle("instant", instant));
 
+    window.__qlassStatus && window.__qlassStatus("item " + (pos + 1) + "/" + order.length + " type=" + item.type + " waiting ready...");
     const ok = await waitReady(el, item.type === "video" ? 20000 : 15000);
     if (!ok) {
       console.warn("skipping unplayable item", item.url);
+      window.__qlassStatus && window.__qlassStatus("item " + (pos + 1) + "/" + order.length + " NOT READY, skipping");
       next.innerHTML = "";
       timer = setTimeout(showNext, 300);
       return;
     }
 
     if (item.type === "video") {
+      window.__qlassStatus && window.__qlassStatus("item " + (pos + 1) + "/" + order.length + " ready, calling play()...");
       // el.play() has no built-in timeout — on some TV WebViews its Promise never settles at all
       // (neither resolves nor rejects), which used to freeze the entire display on this single
       // await forever (nothing else runs after it until it does). Race it against a timer so a
@@ -315,6 +335,7 @@
           // for a gesture. Skip this one item and move on; keep tap-to-resume as a bonus for the
           // (rare) case someone actually does interact with the screen.
           console.warn("video could not autoplay even muted; skipping", item.url);
+          window.__qlassStatus && window.__qlassStatus("item " + (pos + 1) + "/" + order.length + " play() failed even muted, skipping");
           next.innerHTML = "";
           timer = setTimeout(showNext, 300);
           return;
@@ -327,6 +348,7 @@
     cur.classList.remove("show");
     active = 1 - active;
     lastShownAt = Date.now(); // watchdog below reloads the page if this stops advancing
+    window.__qlassStatus && window.__qlassStatus("item " + (pos + 1) + "/" + order.length + " type=" + item.type + " SHOWING (muted=" + (el.tagName === "VIDEO" ? el.muted : "n/a") + ")");
     // Free the previous layer's media after the fade so the TV doesn't keep decoding it.
     setTimeout(() => { const c = cur.querySelector("canvas"); if (c && c._stop) c._stop(); const v = cur.querySelector("video"); if (v) { v.pause(); v.removeAttribute("src"); v.load(); } cur.innerHTML = ""; }, instant ? 0 : 900);
 
@@ -401,10 +423,12 @@
   }, 20000);
 
   (async () => {
+    window.__qlassStatus && window.__qlassStatus("booting, fetching playlist...");
     keepAwake();
     let p = await fetchPlaylist();
     while (!p) { await sleep(5000); p = await fetchPlaylist(); }
     applyUpdate(p);
+    window.__qlassStatus && window.__qlassStatus("playlist loaded (" + p.items.length + " items), starting rotation");
     badge.classList.remove("show");
     pollLoop();
     showNext();
