@@ -70,6 +70,10 @@
   .layer.show { opacity: 1; }
   .layer.instant { transition: none; }
   .layer img, .layer video { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
+  /* Forces the video onto its own GPU compositing layer. Some Android TV WebViews decode video to a
+     separate hardware overlay that doesn't composite over regular page content unless promoted like
+     this — without it, audio plays but the frame itself silently never becomes visible. */
+  .layer video { transform: translateZ(0); -webkit-transform: translateZ(0); will-change: transform; }
   .layer canvas { position: absolute; inset: 0; margin: auto; width: calc(var(--vw, 1vw) * 100); height: calc(var(--vw, 1vw) * 56.25);
     max-width: calc(var(--vh, 1vh) * 177.78); max-height: calc(var(--vh, 1vh) * 100); display: block; }
   .layer .art { position: absolute; inset: 0; background: #08064F; }
@@ -274,7 +278,11 @@
     const { wrap, el } = buildElement(item, playlist.settings);
     next.innerHTML = "";
     next.appendChild(wrap);
-    const instant = playlist.settings.transition === "none";
+    // Force no-fade for video: on some TV browsers, hardware video decode renders to a separate
+    // overlay surface that doesn't composite correctly under a CSS opacity transition — the audio
+    // plays fine but the frame itself never becomes visible. Fading images/canvas slides is safe;
+    // video always cuts instantly regardless of the configured transition setting.
+    const instant = playlist.settings.transition === "none" || item.type === "video";
     layers.forEach((l) => l.classList.toggle("instant", instant));
 
     const ok = await waitReady(el, item.type === "video" ? 20000 : 15000);
