@@ -47,7 +47,7 @@ const DEFAULT_SETTINGS = {
   // Qlass Coins leaderboard banners, read live from the rewards database.
   boards: {
     enabled: true,
-    show: ["coins", "dppSubmissions", "dppScores", "rewards", "attendance"],
+    show: ["coins", "dppSubmissions", "dppScores", "rewards", "schoolTests", "attendance"],
     duration: 14,     // seconds per board — longer than an achiever card, there's more to read
     every: 4,         // insert one board after every N uploaded items
     repeat: 1,        // times each board appears per cycle (copies are spread far apart)

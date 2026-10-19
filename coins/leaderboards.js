@@ -114,6 +114,47 @@ export const BOARDS = {
       limit 8
     `,
   },
+  schoolTests: {
+    title: "School Test Toppers",
+    subtitle: "Best school result shared by each class · last 60 days",
+    unit: "%",
+    accent: "#5FAE86",
+    windowDays: 60,
+    // Students upload their own school marksheets to the rewards app; staff verify each one, and
+    // only 'processed' rows are trusted here. Pending and rejected uploads never reach the screen.
+    //
+    // A handful of rows have obtainedMarks and fullMarks entered the wrong way round, which would
+    // otherwise show as 110% on a public display. Those submissions are dropped rather than
+    // silently reinterpreted — a guessed mark next to a child's name is worse than no row at all.
+    //
+    // Rows below 80% are left off too. This hangs in a reception where parents are waiting, and the
+    // best score in a thin class can be a middling one: naming a child under "Toppers" at 45% does
+    // them no favours. A class with nothing above the mark simply sits this one out.
+    sql: `
+      with per_exam as (
+        select t.id, t.qlass_id,
+               sum((sub->>'obtainedMarks')::numeric) as got,
+               sum((sub->>'fullMarks')::numeric)     as total,
+               bool_or((sub->>'obtainedMarks')::numeric > (sub->>'fullMarks')::numeric) as suspect
+        from school_test_submissions t
+             cross join lateral jsonb_array_elements(t.subjects) sub
+        where t.status::text = 'processed'
+          and jsonb_array_length(t.subjects) > 0
+          and t.exam_date > now() - ($2 || ' days')::interval
+        group by t.id, t.qlass_id
+      ), scored as (
+        select s.class, s.name, round(100.0 * p.got / p.total, 0)::int as value,
+               row_number() over (partition by s.class order by p.got / p.total desc, s.name) as rn
+        from per_exam p join students s on s.qlass_id = p.qlass_id
+        where p.total > 0 and not p.suspect and s.name !~* $1
+          and p.got <= p.total
+          and 100.0 * p.got / p.total >= 80
+      )
+      select class, name, value from scored where rn = 1
+      order by nullif(regexp_replace(class, '\\D', '', 'g'), '')::int desc nulls last
+      limit 8
+    `,
+  },
   attendance: {
     title: "Attendance Stars",
     subtitle: "Most days present · last 30 days",
