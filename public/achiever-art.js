@@ -242,6 +242,12 @@
     });
     withA(ctx, A(o, 0.7), 30 * u, () => txt(ctx, String(b.subtitle || '').toUpperCase(), x0, 248 * u, { size: 23 * u, w: 800, color: accent, ls: 5.5 * u, align: 'left', maxW: span }));
     withA(ctx, A(o, 0.9), 40 * u, () => txt(ctx, b.title || 'Leaderboard', x0, 326 * u, { size: 74 * u, fam: SERIF, italic: true, align: 'left', maxW: span }));
+    // Boards built from marksheets the students upload themselves say so, quietly. It sits under
+    // the title in muted small caps so a parent reading the room can tell at a glance which
+    // numbers came from our own records and which came from a child's own school report.
+    if (b.note) {
+      withA(ctx, A(o, 1.0), 20 * u, () => txt(ctx, String(b.note).toUpperCase(), x0, 368 * u, { size: 18 * u, w: 600, color: MUTED, ls: 2.6 * u, align: 'left', maxW: span }));
+    }
 
     const rows = (b.rows || []).slice(0, 9);
     if (!rows.length) {

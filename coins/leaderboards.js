@@ -117,6 +117,7 @@ export const BOARDS = {
   schoolTests: {
     title: "School Test Toppers",
     subtitle: "Best major school exam shared by each class · last 60 days",
+    note: "Marks as shared by students · verified by Qlass staff",
     unit: "%",
     accent: "#5FAE86",
     windowDays: 60,
@@ -164,6 +165,7 @@ export const BOARDS = {
   subjectStars: {
     title: "Subject Stars",
     subtitle: "Best core-subject score in a major exam",
+    note: "Marks as shared by students · verified by Qlass staff",
     unit: "%",
     accent: "#8C7BD8",
     windowDays: 180,
@@ -237,6 +239,7 @@ export async function fetchBoard(key) {
     subtitle: spec.subtitle,
     unit: spec.unit,
     accent: spec.accent,
+    note: spec.note || "",
     rows: rows.map((r, i) => ({
       rank: i + 1,
       name: r.name,

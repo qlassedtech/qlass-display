@@ -307,10 +307,15 @@ async function getStudents(a, force = false) {
 // every 30s. Cache for 10 minutes and keep serving the last good copy if the rewards DB is briefly
 // unreachable — a stale board on screen beats a gap in the rotation.
 let boardCache = { key: "", at: 0, boards: [], errors: [] };
+// Students upload marksheets and earn coins through the day, so the boards are refreshed on a
+// timer rather than only when a request happens to arrive. Polling here also keeps the database
+// round-trip off the TV's request path: the player asks every 30s and gets whatever is already warm.
+const BOARD_TTL_MS = 5 * 60_000;
+
 async function getBoards(b, force = false) {
   if (!b.enabled) return { boards: [], errors: [] };
   const key = (b.show || []).join(",");
-  if (!force && boardCache.key === key && Date.now() - boardCache.at < 600000) return boardCache;
+  if (!force && boardCache.key === key && Date.now() - boardCache.at < BOARD_TTL_MS) return boardCache;
   try {
     const { boards, errors } = await fetchBoards(b.show);
     // Only replace the cache when we actually got something; otherwise keep the last good boards.
@@ -321,6 +326,15 @@ async function getBoards(b, force = false) {
   }
   return boardCache;
 }
+
+// Kept unref'd so it never holds the process open, and errors are swallowed: getBoards already
+// keeps the last good standings when a refresh fails, so a flaky database just means stale rows.
+setInterval(async () => {
+  try {
+    const s = await loadSettings();
+    if (s.boards && s.boards.enabled) await getBoards(s.boards, true);
+  } catch {}
+}, BOARD_TTL_MS).unref();
 
 const achieversFor = (a, students) => {
   const test = a.test || latestTest(students);
