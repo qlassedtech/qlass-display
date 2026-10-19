@@ -34,6 +34,7 @@ export const BOARDS = {
     title: "Qlass Coins Leaders",
     subtitle: "Highest balance in every class",
     unit: "coins",
+    layout: "cards",
     accent: "#C9A35C",
     windowDays: 0, // lifetime: students think in total balance, not a rolling window
     // Balance, not earnings — it has to match the number the student sees in the rewards app, which
@@ -62,6 +63,50 @@ export const BOARDS = {
       )
       select class, name, value from ranked where rn = 1
       order by nullif(regexp_replace(class, '\\D', '', 'g'), '')::int desc nulls last
+    `,
+  },
+  coinsClass: {
+    title: "Class Coin Champions",
+    subtitle: "Top earners in one class",
+    unit: "coins",
+    accent: "#C9A35C",
+    layout: "cards",
+    windowDays: 0,
+    // The per-class board shows one name from each class, which hides how deep a class runs:
+    // around 160 students hold coins and only nine are ever on screen. This one spotlights a
+    // single class at a time and lists its top eight, rotating to the next class every quarter
+    // hour so every class gets its turn through the day rather than the same seniors always
+    // winning a combined top ten. Classes with fewer than five holders sit out — a podium of
+    // three is not a leaderboard.
+    sql: `
+      with earned as (
+        select e.qlass_id, sum(e.coins_delta) as value from ledger_events e group by 1
+      ), spent as (
+        select qlass_id, sum(item_cost) as value from redemptions where awarded_at is not null group by 1
+      ), net as (
+        select earned.qlass_id, earned.value - coalesce(spent.value, 0) as value
+        from earned left join spent on spent.qlass_id = earned.qlass_id
+      ), holders as (
+        select s.class, s.name, net.value
+        from net join students s on s.qlass_id = net.qlass_id
+        where s.name !~* $1 and net.value > 0
+      ), eligible as (
+        select class, row_number() over (
+                 order by nullif(regexp_replace(class, '\\D', '', 'g'), '')::int desc nulls last
+               ) as i
+        from holders group by class having count(*) >= 5
+      ), chosen as (
+        select class from eligible
+        where i = 1 + (floor(extract(epoch from now()) / 900)::bigint
+                       % (select count(*) from eligible))
+      ), ranked as (
+        select h.class, h.name, h.value,
+               row_number() over (order by h.value desc, h.name) as rn
+        from holders h where h.class = (select class from chosen)
+      )
+      select (select class from chosen) || ' · highest balances' as subtitle,
+             class, name, value::int as value
+      from ranked where rn <= 8 order by rn
     `,
   },
   dppSubmissions: {
@@ -236,10 +281,13 @@ export async function fetchBoard(key) {
   return {
     key,
     title: spec.title,
-    subtitle: spec.subtitle,
     unit: spec.unit,
     accent: spec.accent,
     note: spec.note || "",
+    layout: spec.layout || "list",
+    // A board whose SQL returns a subtitle column speaks for itself — the rotating class
+    // spotlight has to name the class it is currently showing.
+    subtitle: (rows[0] && rows[0].subtitle) || spec.subtitle,
     rows: rows.map((r, i) => ({
       rank: i + 1,
       name: r.name,

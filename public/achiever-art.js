@@ -249,10 +249,41 @@
       withA(ctx, A(o, 1.0), 20 * u, () => txt(ctx, String(b.note).toUpperCase(), x0, 368 * u, { size: 18 * u, w: 600, color: MUTED, ls: 2.6 * u, align: 'left', maxW: span }));
     }
 
-    const rows = (b.rows || []).slice(0, 9);
+    const rows = (b.rows || []).slice(0, b.layout === 'cards' ? 8 : 9);
     if (!rows.length) {
       withA(ctx, A(o, 1.2), 30 * u, () => txt(ctx, 'Standings refresh shortly', W / 2, 660 * u, { size: 46 * u, w: 600, color: SOFT }));
       withA(ctx, A(o, 2.0), 20 * u, () => ctaStrip(ctx, W, H, u, o));
+      return;
+    }
+    // A coin total reads better as a face than as a table row, so the coin boards lay their
+    // students out as tiles. There are no student photographs anywhere in the rewards database,
+    // so each tile carries a monogram disc rather than a stock face — a placeholder portrait
+    // against a real child's name would be worse than no portrait at all.
+    if (b.layout === 'cards') {
+      const cols = 4, gap = 26 * u;
+      const cw = (span - gap * (cols - 1)) / cols;
+      const chh = 250 * u, topC = 404 * u;
+      rows.forEach((r, i) => {
+        const cx = x0 + (i % cols) * (cw + gap), cy = topC + Math.floor(i / cols) * (chh + gap);
+        withA(ctx, A(o, 1.15 + i * 0.08), 26 * u, () => {
+          ctx.save(); ctx.globalAlpha *= 0.12; ctx.fillStyle = '#ffffff';
+          rr(ctx, cx, cy, cw, chh, 18 * u); ctx.fill(); ctx.restore();
+          const dr = 46 * u, dcx = cx + cw / 2, dcy = cy + 62 * u;
+          ctx.save(); ctx.fillStyle = accent; ctx.globalAlpha *= 0.9;
+          ctx.beginPath(); ctx.arc(dcx, dcy, dr, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+          const initials = String(r.name || '').trim().split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('').toUpperCase();
+          txt(ctx, initials, dcx, dcy, { size: 42 * u, w: 800, color: NAVY3 });
+          if (r.rank <= 3) {
+            ctx.save(); ctx.fillStyle = NAVY3; ctx.globalAlpha *= 0.92;
+            ctx.beginPath(); ctx.arc(dcx + dr * 0.78, dcy - dr * 0.72, 17 * u, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+            txt(ctx, String(r.rank), dcx + dr * 0.78, dcy - dr * 0.72, { size: 19 * u, w: 800, color: accent });
+          }
+          txt(ctx, r.name || '', dcx, cy + 148 * u, { size: 30 * u, w: 700, maxW: cw - 22 * u });
+          txt(ctx, String(r.value), dcx, cy + 198 * u, { size: 52 * u, fam: SERIF, color: accent });
+          txt(ctx, (b.unit || '').toUpperCase(), dcx, cy + 228 * u, { size: 18 * u, w: 700, color: MUTED, ls: 2.4 * u });
+        });
+      });
+      withA(ctx, A(o, 1.15 + rows.length * 0.08 + 0.3), 20 * u, () => ctaStrip(ctx, W, H, u, o));
       return;
     }
     // Rows stop above the CTA strip, which starts at H - 154u.
