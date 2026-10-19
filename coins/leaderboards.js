@@ -116,7 +116,7 @@ export const BOARDS = {
   },
   schoolTests: {
     title: "School Test Toppers",
-    subtitle: "Best school result shared by each class · last 60 days",
+    subtitle: "Best major school exam shared by each class · last 60 days",
     unit: "%",
     accent: "#5FAE86",
     windowDays: 60,
@@ -141,6 +141,12 @@ export const BOARDS = {
         where t.status::text = 'processed'
           and jsonb_array_length(t.subjects) > 0
           and t.exam_date > now() - ($2 || ' days')::interval
+          -- Major only: periodic tests, half-yearlies, finals. Mixing in class and chapter tests
+          -- let a 10-mark quiz at 100% outrank a half-yearly at 97%, which is not a fair ranking.
+          and t.exam_type = 'Major'
+          -- Some marksheets carry their own 'Total' line as if it were another subject; summing
+          -- it alongside the real rows counts the paper twice.
+          and lower(sub->>'subject') not in ('total', 'grand total')
         group by t.id, t.qlass_id
       ), scored as (
         select s.class, s.name, round(100.0 * p.got / p.total, 0)::int as value,
@@ -152,6 +158,49 @@ export const BOARDS = {
       )
       select class, name, value from scored where rn = 1
       order by nullif(regexp_replace(class, '\\D', '', 'g'), '')::int desc nulls last
+      limit 8
+    `,
+  },
+  subjectStars: {
+    title: "Subject Stars",
+    subtitle: "Best core-subject score in a major exam",
+    unit: "%",
+    accent: "#8C7BD8",
+    windowDays: 180,
+    // Ranked one row per student, showing their single strongest subject. Ranking per subject
+    // instead put the same two names in all five slots — a handful of students top every science
+    // paper, so the board read as a list of two children rather than a wall of achievement.
+    //
+    // Only the five subjects students actually report in volume are counted. The rest of the
+    // field is free text and arrives as 'TWAU', 'Fraction' or 'FAC-1 (Mind Map)', which cannot be
+    // ranked against anything.
+    sql: `
+      with rows_ as (
+        select st.name, st.class,
+               case
+                 when lower(s->>'subject') in ('mathematics', 'maths', 'math') then 'Mathematics'
+                 when lower(s->>'subject') = 'science'   then 'Science'
+                 when lower(s->>'subject') = 'physics'   then 'Physics'
+                 when lower(s->>'subject') = 'chemistry' then 'Chemistry'
+                 when lower(s->>'subject') = 'biology'   then 'Biology'
+               end as subj,
+               (s->>'obtainedMarks')::numeric as got,
+               (s->>'fullMarks')::numeric     as total
+        from school_test_submissions t
+             join students st on st.qlass_id = t.qlass_id
+             cross join lateral jsonb_array_elements(t.subjects) s
+        where t.status::text = 'processed' and t.exam_type = 'Major'
+          and t.exam_date > now() - ($2 || ' days')::interval
+          and st.name !~* $1
+      ), best as (
+        select name, class, subj, round(100.0 * got / total, 0)::int as value,
+               row_number() over (partition by name order by got / total desc, subj) as rn
+        from rows_
+        where subj is not null and total > 0 and got <= total
+      )
+      select subj || ' · ' || class as class, name, value
+      from best where rn = 1 and value >= 80
+      order by value desc, name
       limit 8
     `,
   },
