@@ -50,6 +50,7 @@ const DEFAULT_SETTINGS = {
     show: ["coins", "dppSubmissions", "dppScores", "rewards", "attendance"],
     duration: 14,     // seconds per board — longer than an achiever card, there's more to read
     every: 4,         // insert one board after every N uploaded items
+    repeat: 1,        // times each board appears per cycle (copies are spread far apart)
   },
   achievers: {
     enabled: true,
@@ -371,6 +372,7 @@ app.get("/api/playlist", async (_req, res) => {
   const [list, settings] = await Promise.all([readJson(MEDIA_FILE, []), loadSettings()]);
   const uploads = list.filter((m) => m.enabled).map((m) => ({
     id: m.id, type: m.type, url: `/media/${m.file}`, duration: m.duration ?? null, caption: m.caption || "",
+    priority: m.priority || 1,
   }));
   const a = settings.achievers;
   const bcfg = settings.boards;
@@ -588,6 +590,7 @@ app.put("/api/settings", requireAuth, async (req, res) => {
     if ("enabled" in b.boards) bd.enabled = Boolean(b.boards.enabled);
     if ("duration" in b.boards) bd.duration = Math.min(Math.max(Number(b.boards.duration) || 14, 4), 120);
     if ("every" in b.boards) bd.every = Math.min(Math.max(Number(b.boards.every) || 4, 1), 50);
+    if ("repeat" in b.boards) bd.repeat = Math.min(Math.max(Math.round(Number(b.boards.repeat)) || 1, 1), 3);
     if (Array.isArray(b.boards.show)) bd.show = b.boards.show.filter((k) => k in BOARDS);
   }
   if ("audioCompressor" in b) cur.audioCompressor = Boolean(b.audioCompressor);
