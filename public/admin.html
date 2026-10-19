@@ -485,6 +485,14 @@
             <label>${m.type === "video" ? "Cut after (s)" : "Show for (s)"}</label>
             <input type="number" class="duration" min="1" placeholder="${m.type === "video" ? "full" : settings.imageDuration}" value="${m.duration ?? ""}">
           </div>
+          <div class="row">
+            <label title="How many times this appears in one full cycle. Repeats are spread far apart.">Show per cycle</label>
+            <select class="priority">
+              <option value="1" ${(m.priority || 1) == 1 ? "selected" : ""}>once</option>
+              <option value="2" ${(m.priority || 1) == 2 ? "selected" : ""}>twice</option>
+              <option value="3" ${(m.priority || 1) == 3 ? "selected" : ""}>3×</option>
+            </select>
+          </div>
           <div class="row" style="justify-content:space-between">
             <span><button class="ghost up" title="Move up">↑</button> <button class="ghost down" title="Move down">↓</button></span>
             <button class="danger del">Delete</button>
@@ -498,6 +506,7 @@
       card.querySelector(".enabled").onchange = (e) => { patch({ enabled: e.target.checked }); card.classList.toggle("off", !e.target.checked); renderCount(); };
       card.querySelector(".caption").onchange = (e) => patch({ caption: e.target.value });
       card.querySelector(".duration").onchange = (e) => patch({ duration: e.target.value === "" ? null : Number(e.target.value) });
+      card.querySelector(".priority").onchange = (e) => patch({ priority: Number(e.target.value) });
       card.querySelector(".up").onclick = () => move(id, -1);
       card.querySelector(".down").onclick = () => move(id, +1);
       card.querySelector(".del").onclick = async () => {

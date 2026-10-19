@@ -381,12 +381,19 @@ app.get("/api/playlist", async (_req, res) => {
   // together — a reception sees one long block of clips, then a long block of stills. Dealing
   // round-robin from separate piles keeps videos, photos, leaderboards and achiever cards
   // alternating, so whenever someone looks up the screen has changed character.
+  // A slide can be worth seeing more than once a cycle. Results and the coin leaderboards are
+  // what a waiting parent actually wants, but one pass of ~22 minutes means a ten-minute wait
+  // shows them under half the deck. Repeating those few beats padding the deck with weaker
+  // filler. Each copy is positioned a full 1/priority around the cycle from its siblings, so
+  // repeats land far apart wherever the item happens to sit in the upload list.
+  const weigh = (m) => Math.max(1, Math.min(3, Math.round(Number(m.priority)) || 1));
+  const bRepeat = Math.max(1, Math.min(3, Math.round(Number(bcfg.repeat)) || 1));
   const lanes = [
-    uploads.filter((m) => m.type === "video"),
-    uploads.filter((m) => m.type !== "video"),
-    boards.map((b) => ({ id: "board-" + b.key, type: "board", duration: bcfg.duration, board: b })),
-    ach.map((s) => ({ id: "ach-" + s.key, type: "achiever", duration: a.duration, student: s })),
-  ].filter((l) => l.length);
+    { items: uploads.filter((m) => m.type === "video"), weight: null },
+    { items: uploads.filter((m) => m.type !== "video"), weight: null },
+    { items: boards.map((b) => ({ id: "board-" + b.key, type: "board", duration: bcfg.duration, board: b })), weight: bRepeat },
+    { items: ach.map((s) => ({ id: "ach-" + s.key, type: "achiever", duration: a.duration, student: s })), weight: null },
+  ].filter((l) => l.items.length);
 
   const items = [];
   if (ach.length >= 2) items.push({ id: "recap", type: "recap", duration: a.recapDuration, students: ach, minPercent: a.minPercent });
@@ -395,7 +402,27 @@ app.get("/api/playlist", async (_req, res) => {
     // 16 videos and one with 4 boards both end up evenly distributed rather than front-loaded.
     const slotted = [];
     lanes.forEach((lane, li) => {
-      lane.forEach((item, i) => slotted.push({ item, pos: (i + 0.5) / lane.length, li }));
+      // Group a lane by weight before positioning. The result banners were uploaded together, so
+      // in raw upload order they sit side by side and their repeats would land side by side too.
+      // Spreading each weight group across its own full turn of the cycle fixes that.
+      const groups = new Map();
+      lane.items.forEach((item) => {
+        const w = lane.weight || weigh(item);
+        if (!groups.has(w)) groups.set(w, []);
+        groups.get(w).push(item);
+      });
+      groups.forEach((group, w) => {
+        // Lay the group's copies out as one evenly spaced run of n*w slots, with each item's
+        // copies exactly n slots apart. Offsetting by a flat 1/w instead would drop one copy
+        // straight onto a sibling's slot, which is what paired them up.
+        const n = group.length;
+        group.forEach((item, i) => {
+          for (let j = 0; j < w; j++) {
+            const pos = (j * n + i + 0.5) / (n * w);
+            slotted.push({ item: j === 0 ? item : { ...item, id: item.id + "-r" + j }, pos, li });
+          }
+        });
+      });
     });
     slotted.sort((x, y) => x.pos - y.pos || x.li - y.li);
     // Two videos back to back is the one pairing worth avoiding: they are the longest items, so
@@ -510,6 +537,10 @@ app.patch("/api/media/:id", requireAuth, async (req, res) => {
     const b = req.body || {};
     if ("enabled" in b) m.enabled = Boolean(b.enabled);
     if ("caption" in b) m.caption = String(b.caption).slice(0, 200);
+    if ("priority" in b) {
+      const n = Number(b.priority);
+      m.priority = Number.isFinite(n) ? Math.max(1, Math.min(3, Math.round(n))) : 1;
+    }
     if ("duration" in b) {
       const d = Number(b.duration);
       m.duration = b.duration === null || b.duration === "" || !Number.isFinite(d) || d <= 0 ? null : Math.min(d, 3600);
