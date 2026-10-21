@@ -5,6 +5,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
 import * as metaGraph from "./meta/graph.js";
 import * as metaAds from "./meta/ads.js";
 import * as metaSnapshot from "./meta/snapshot.js";
@@ -337,6 +338,26 @@ setInterval(async () => {
     if (s.boards && s.boards.enabled) await getBoards(s.boards, true);
   } catch {}
 }, BOARD_TTL_MS).unref();
+
+// Student portraits are cached from OneDrive rather than hotlinked, so new joiners only reach the
+// coin tiles once the cache is topped up. Runs daily and shortly after boot; already-cached faces
+// are skipped, so a run is a handful of requests rather than 53. Lives here rather than in the
+// server's crontab so it ships and deploys with the app instead of being set up by hand.
+const syncPhotos = () => {
+  if (!process.env.AZURE_CLIENT_ID) return;        // no Graph credentials: nothing to sync
+  const child = spawn(process.execPath, [path.join(__dirname, "scripts", "sync-student-photos.mjs")],
+    { stdio: ["ignore", "pipe", "pipe"] });
+  let out = "";
+  child.stdout.on("data", (d) => { out += d; });
+  child.stderr.on("data", (d) => { out += d; });
+  child.on("close", () => {
+    const line = out.split("\n").reverse().find((l) => l.startsWith("photos:"));
+    if (line) console.log("[photo-sync] " + line);
+  });
+  child.on("error", () => {});
+};
+setTimeout(syncPhotos, 60_000).unref();
+setInterval(syncPhotos, 24 * 60 * 60_000).unref();
 
 const achieversFor = (a, students) => {
   const test = a.test || latestTest(students);
