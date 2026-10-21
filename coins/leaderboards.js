@@ -15,14 +15,24 @@ const { Pool } = pg;
 // leaving a broken image on the TV.
 const PHOTO_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "data", "student-photos");
 // Maps student id to the cached filename, since portraits arrive as either JPEG or PNG.
+//
+// Students pick their own photo, and a sweep of the first 53 found anime characters, a WhatsApp QR
+// code, a Minecraft screenshot, deities, scenery and three blank frames — so a cached file is not
+// on its own fit to show. data/photo-review.json holds a verdict per student and only a cleared
+// photo is handed to a board. An unreviewed photo counts as not cleared: this screen faces a
+// public waiting room, so the default has to be initials rather than whatever was uploaded.
+const REVIEW_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "data", "photo-review.json");
 let photoMap = new Map(), photoAt = 0;
 function photoFile(id) {
   if (!id) return "";
   if (Date.now() - photoAt > 60_000) {
+    let review = {};
+    try { review = JSON.parse(fs.readFileSync(REVIEW_FILE, "utf8")); } catch {}
     try {
       photoMap = new Map(fs.readdirSync(PHOTO_DIR)
         .filter((f) => /\.(jpe?g|png)$/i.test(f))
-        .map((f) => [f.replace(/\.(jpe?g|png)$/i, ""), f]));
+        .map((f) => [f.replace(/\.(jpe?g|png)$/i, ""), f])
+        .filter(([sid]) => review[sid] && review[sid].ok));
     } catch { photoMap = new Map(); }
     photoAt = Date.now();
   }
