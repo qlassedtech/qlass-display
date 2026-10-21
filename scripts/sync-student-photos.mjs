@@ -68,19 +68,27 @@ async function main() {
   let saved = 0, skipped = 0, failed = 0;
 
   for (const r of rows) {
-    // One file per student id, so a changed photo overwrites rather than accumulating.
-    const dest = path.join(OUT, `${r.qlass_id}.jpg`);
-    if (!force && fs.existsSync(dest)) { skipped++; continue; }
+    // One file per student id, so a changed photo overwrites rather than accumulating. Graph
+    // hands back whatever suits the source, so the extension follows the bytes: several of these
+    // portraits were uploaded as PNG and a .jpg holding PNG data is a trap for anything later.
+    const existing = ["jpg", "png"].map((e) => path.join(OUT, `${r.qlass_id}.${e}`)).find((f) => fs.existsSync(f));
+    if (!force && existing) { skipped++; continue; }
     try {
       const res = await fetch(
         `https://graph.microsoft.com/v1.0/shares/${shareToken(r.photo_url)}/driveItem/thumbnails/0/${SIZE}/content`,
         { headers: { Authorization: `Bearer ${access}` }, redirect: "follow" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const buf = Buffer.from(await res.arrayBuffer());
-      // Only trust something that really is a JPEG — an error page written to disk would show
-      // up as a broken tile on the TV rather than as a failure here.
-      if (buf.subarray(0, 2).toString("hex") !== "ffd8") throw new Error("not a JPEG");
-      await fsp.writeFile(dest, buf);
+      // Only trust real image bytes — an error page written to disk would surface as a broken
+      // tile on the TV rather than as a failure here.
+      const magic = buf.subarray(0, 4).toString("hex");
+      const ext = magic.startsWith("ffd8") ? "jpg" : magic.startsWith("89504e47") ? "png" : null;
+      if (!ext) throw new Error("not an image");
+      await fsp.writeFile(path.join(OUT, `${r.qlass_id}.${ext}`), buf);
+      // A photo re-uploaded in the other format would otherwise leave its old file behind and
+      // keep winning the lookup.
+      const stale = path.join(OUT, `${r.qlass_id}.${ext === "jpg" ? "png" : "jpg"}`);
+      if (fs.existsSync(stale)) await fsp.unlink(stale);
       saved++;
     } catch (e) {
       failed++;

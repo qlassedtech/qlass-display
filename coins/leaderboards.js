@@ -14,15 +14,19 @@ const { Pool } = pg;
 // file is actually on disk, so a student with no photo falls back to initials rather than
 // leaving a broken image on the TV.
 const PHOTO_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "data", "student-photos");
-let photoSet = new Set(), photoAt = 0;
-function hasPhoto(id) {
-  if (!id) return false;
+// Maps student id to the cached filename, since portraits arrive as either JPEG or PNG.
+let photoMap = new Map(), photoAt = 0;
+function photoFile(id) {
+  if (!id) return "";
   if (Date.now() - photoAt > 60_000) {
-    try { photoSet = new Set(fs.readdirSync(PHOTO_DIR).map((f) => f.replace(/\.jpg$/i, ""))); }
-    catch { photoSet = new Set(); }
+    try {
+      photoMap = new Map(fs.readdirSync(PHOTO_DIR)
+        .filter((f) => /\.(jpe?g|png)$/i.test(f))
+        .map((f) => [f.replace(/\.(jpe?g|png)$/i, ""), f]));
+    } catch { photoMap = new Map(); }
     photoAt = Date.now();
   }
-  return photoSet.has(id);
+  return photoMap.get(id) || "";
 }
 
 const TEST_NAME_RE = /(^|\s)(test|demo|sample|dummy)(\s|$)/i;
@@ -311,7 +315,7 @@ export async function fetchBoard(key) {
       name: r.name,
       cls: r.class,
       value: Number(r.value),
-      photoUrl: hasPhoto(r.qlass_id) ? `/student-photos/${r.qlass_id}.jpg` : "",
+      photoUrl: photoFile(r.qlass_id) ? `/student-photos/${photoFile(r.qlass_id)}` : "",
     })),
   };
 }
