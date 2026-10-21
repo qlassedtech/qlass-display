@@ -269,10 +269,22 @@
           ctx.save(); ctx.globalAlpha *= 0.12; ctx.fillStyle = '#ffffff';
           rr(ctx, cx, cy, cw, chh, 18 * u); ctx.fill(); ctx.restore();
           const dr = 46 * u, dcx = cx + cw / 2, dcy = cy + 62 * u;
-          ctx.save(); ctx.fillStyle = accent; ctx.globalAlpha *= 0.9;
-          ctx.beginPath(); ctx.arc(dcx, dcy, dr, 0, Math.PI * 2); ctx.fill(); ctx.restore();
           const initials = String(r.name || '').trim().split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('').toUpperCase();
-          txt(ctx, initials, dcx, dcy, { size: 42 * u, w: 800, color: NAVY3 });
+          if (r.photo && r.photo.width) {
+            ctx.save();
+            ctx.beginPath(); ctx.arc(dcx, dcy, dr, 0, Math.PI * 2); ctx.clip();
+            const sc = Math.max((dr * 2) / r.photo.width, (dr * 2) / r.photo.height);
+            const pw = r.photo.width * sc, ph = r.photo.height * sc;
+            // Nudged up a touch: a square crop of a portrait frames better on the eyes than dead centre.
+            ctx.drawImage(r.photo, dcx - pw / 2, dcy - ph / 2 - ph * 0.04, pw, ph);
+            ctx.restore();
+            ctx.save(); ctx.beginPath(); ctx.arc(dcx, dcy, dr, 0, Math.PI * 2);
+            ctx.strokeStyle = accent; ctx.lineWidth = 3 * u; ctx.globalAlpha *= 0.9; ctx.stroke(); ctx.restore();
+          } else {
+            ctx.save(); ctx.fillStyle = accent; ctx.globalAlpha *= 0.9;
+            ctx.beginPath(); ctx.arc(dcx, dcy, dr, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+            txt(ctx, initials, dcx, dcy, { size: 42 * u, w: 800, color: NAVY3 });
+          }
           if (r.rank <= 3) {
             ctx.save(); ctx.fillStyle = NAVY3; ctx.globalAlpha *= 0.92;
             ctx.beginPath(); ctx.arc(dcx + dr * 0.78, dcy - dr * 0.72, 17 * u, 0, Math.PI * 2); ctx.fill(); ctx.restore();

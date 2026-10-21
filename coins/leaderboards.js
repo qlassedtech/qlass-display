@@ -5,7 +5,25 @@
 // is deliberately tiny — the display is one more reader alongside the app that actually owns the data.
 
 import pg from "pg";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 const { Pool } = pg;
+
+// Photos are cached by scripts/sync-student-photos.mjs. A board only claims a portrait when the
+// file is actually on disk, so a student with no photo falls back to initials rather than
+// leaving a broken image on the TV.
+const PHOTO_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "data", "student-photos");
+let photoSet = new Set(), photoAt = 0;
+function hasPhoto(id) {
+  if (!id) return false;
+  if (Date.now() - photoAt > 60_000) {
+    try { photoSet = new Set(fs.readdirSync(PHOTO_DIR).map((f) => f.replace(/\.jpg$/i, ""))); }
+    catch { photoSet = new Set(); }
+    photoAt = Date.now();
+  }
+  return photoSet.has(id);
+}
 
 const TEST_NAME_RE = /(^|\s)(test|demo|sample|dummy)(\s|$)/i;
 
@@ -56,12 +74,12 @@ export const BOARDS = {
         select earned.qlass_id, earned.value - coalesce(spent.value, 0) as value
         from earned left join spent on spent.qlass_id = earned.qlass_id
       ), ranked as (
-        select s.class, s.name, net.value,
+        select s.qlass_id, s.class, s.name, net.value,
                row_number() over (partition by s.class order by net.value desc, s.name) as rn
         from net join students s on s.qlass_id = net.qlass_id
         where s.name !~* $1
       )
-      select class, name, value from ranked where rn = 1
+      select qlass_id, class, name, value from ranked where rn = 1
       order by nullif(regexp_replace(class, '\\D', '', 'g'), '')::int desc nulls last
     `,
   },
@@ -87,7 +105,7 @@ export const BOARDS = {
         select earned.qlass_id, earned.value - coalesce(spent.value, 0) as value
         from earned left join spent on spent.qlass_id = earned.qlass_id
       ), holders as (
-        select s.class, s.name, net.value
+        select s.qlass_id, s.class, s.name, net.value
         from net join students s on s.qlass_id = net.qlass_id
         where s.name !~* $1 and net.value > 0
       ), eligible as (
@@ -100,12 +118,12 @@ export const BOARDS = {
         where i = 1 + (floor(extract(epoch from now()) / 900)::bigint
                        % (select count(*) from eligible))
       ), ranked as (
-        select h.class, h.name, h.value,
+        select h.qlass_id, h.class, h.name, h.value,
                row_number() over (order by h.value desc, h.name) as rn
         from holders h where h.class = (select class from chosen)
       )
       select (select class from chosen) || ' · highest balances' as subtitle,
-             class, name, value::int as value
+             qlass_id, class, name, value::int as value
       from ranked where rn <= 8 order by rn
     `,
   },
@@ -293,6 +311,7 @@ export async function fetchBoard(key) {
       name: r.name,
       cls: r.class,
       value: Number(r.value),
+      photoUrl: hasPhoto(r.qlass_id) ? `/student-photos/${r.qlass_id}.jpg` : "",
     })),
   };
 }

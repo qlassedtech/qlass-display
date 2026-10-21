@@ -367,7 +367,11 @@
     cv.width = 1920; cv.height = 1080;
     wrap.appendChild(cv);
     const ctx = cv.getContext("2d");
-    const people = item.type === "recap" ? item.students : item.type === "board" ? [] : [item.student];
+    // Board rows carry a photoUrl just like achievers do, so they go through the same preload and
+    // come out as a ready Image on .photo — the renderer is synchronous and cannot wait for one.
+    const people = item.type === "recap" ? item.students
+      : item.type === "board" ? (item.board.rows || [])
+      : [item.student];
     let raf = 0, t0 = 0;
     const opts = { logo: null, contact: playlist.settings.contact || "", minPct: item.minPercent };
     const paint = (t) => {

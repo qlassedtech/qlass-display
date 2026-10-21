@@ -27,8 +27,10 @@ const MEDIA_FILE = path.join(DATA_DIR, "media.json");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 const AUTH_FILE = path.join(DATA_DIR, "auth.json");
 const CLIENT_LOG_FILE = path.join(DATA_DIR, "client-log.json");
+const PHOTO_DIR = path.join(DATA_DIR, "student-photos");
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+fs.mkdirSync(PHOTO_DIR, { recursive: true });
 
 if (ADMIN_PASSWORD === "change-me" || SESSION_SECRET === "dev-secret-change-me") {
   console.warn("WARNING: ADMIN_PASSWORD / SESSION_SECRET are using defaults. Set them in .env before going live.");
@@ -349,6 +351,9 @@ app.use(express.json());
 // Static: player + admin UI, and uploaded media (with range support for video seeking)
 app.use(express.static(path.join(__dirname, "public"), { index: false }));
 app.use("/media", express.static(UPLOAD_DIR, { maxAge: "365d", immutable: true, acceptRanges: true }));
+// Cached student portraits. Not immutable like uploads: a student's photo can be replaced in the
+// rewards app, so a day of caching keeps the TV quick without pinning a face that has changed.
+app.use("/student-photos", express.static(PHOTO_DIR, { maxAge: "1d", acceptRanges: true }));
 
 app.get("/", (_req, res) => res.sendFile(path.join(__dirname, "public", "display.html")));
 app.get("/admin", (_req, res) => res.sendFile(path.join(__dirname, "public", "admin.html")));
