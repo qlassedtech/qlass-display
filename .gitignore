@@ -1,13 +1,16 @@
-node_modules/
-data/uploads/*
-!data/uploads/.gitkeep
-data/media.json
-data/settings.json
-data/client-log.json
-.env
-data/meta/
-data/auth.json
-.claude/scheduled_tasks.lock
 
+!data/uploads/.gitkeep
 # Local GMB media staging — 38MB of photos/videos, not app code
+.claude/scheduled_tasks.lock
+.env
 GMB Photos and Videos/
+data/auth.json
+data/client-log.json
+data/digests/
+data/media.json
+data/meta/
+data/photo-review.json
+data/settings.json
+data/student-photos/
+data/uploads/*
+node_modules/

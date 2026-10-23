@@ -359,6 +359,37 @@ const syncPhotos = () => {
 setTimeout(syncPhotos, 60_000).unref();
 setInterval(syncPhotos, 24 * 60 * 60_000).unref();
 
+// One small scheduler for the daily background jobs, so adding the next one is a line rather than
+// another pair of timers. Each job names its own hour in the configured timezone and runs at most
+// once a day; a missed hour (restart, outage) is simply skipped rather than fired late, since a
+// digest about yesterday delivered at midnight is worth less than tomorrow's on time.
+const DAILY_JOBS = [
+  { name: "digest", hour: 7, script: path.join(__dirname, "jobs", "daily-digest.mjs"), prefix: "digest:" },
+];
+const lastRunDay = new Map();
+const runJob = (job) => {
+  const child = spawn(process.execPath, [job.script], { stdio: ["ignore", "pipe", "pipe"] });
+  let out = "";
+  child.stdout.on("data", (d) => { out += d; });
+  child.stderr.on("data", (d) => { out += d; });
+  child.on("close", (code) => {
+    const line = out.split("\n").reverse().find((l) => l.startsWith(job.prefix));
+    console.log(`[${job.name}] ${line || (code === 0 ? "done" : "failed: " + out.trim().split("\n").pop())}`);
+  });
+  child.on("error", () => {});
+};
+setInterval(async () => {
+  let tz = "Asia/Kolkata";
+  try { tz = (await loadSettings()).timezone || tz; } catch {}
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: tz }));
+  const day = now.toISOString().slice(0, 10);
+  for (const job of DAILY_JOBS) {
+    if (now.getHours() !== job.hour || lastRunDay.get(job.name) === day) continue;
+    lastRunDay.set(job.name, day);
+    runJob(job);
+  }
+}, 10 * 60_000).unref();
+
 const achieversFor = (a, students) => {
   const test = a.test || latestTest(students);
   return students.filter((s) => s.exam === test && (!a.cls || s.cls === a.cls) && s.pct >= a.minPercent && !a.hidden.includes(s.key)).sort((x, y) => y.pct - x.pct);
@@ -399,6 +430,12 @@ app.post("/api/logout", (_req, res) => {
 app.get("/api/me", (req, res) => res.json({ signedIn: verifyToken(parseCookies(req).qd_session) }));
 // Invalidates every other signed-in session (e.g. if the shared password was exposed) by bumping the epoch,
 // then re-signs the caller in on the new epoch so they aren't locked out by their own click.
+// Pull a digest on demand rather than waiting for the morning run.
+app.post("/api/jobs/digest", requireAuth, (_req, res) => {
+  runJob(DAILY_JOBS[0]);
+  res.json({ ok: true, note: "Digest is running; it lands in data/digests within a minute." });
+});
+
 app.post("/api/revoke-sessions", requireAuth, async (req, res) => {
   await revokeAllSessions();
   const secure = req.headers["x-forwarded-proto"] === "https" || req.secure;
