@@ -142,7 +142,12 @@ async function draftReplies(env, items) {
         headers: { "content-type": "application/json", "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
         body: JSON.stringify({ model: MODEL, max_tokens: 200, messages: [{ role: "user", content: prompt }] }),
       });
-      if (!r.ok) throw new Error(`api ${r.status}`);
+      if (!r.ok) {
+        // Surface what the API actually said. "api 400" sent someone hunting for a bug in the
+        // request when the real answer was that the key had no credit left on it.
+        const body = await r.json().catch(() => ({}));
+        throw new Error((body.error && body.error.message) || `api ${r.status}`);
+      }
       const d = await r.json();
       out.push({ ...it, draft: (d.content || []).map((c) => c.text || "").join("").trim() });
     } catch (e) {
@@ -194,7 +199,9 @@ function toMarkdown(d) {
   L.push("", "## Reception screen");
   const s = d.screen;
   if (!s.available) L.push(`_Unavailable: ${s.why}_`);
-  else if (!s.seen) L.push("No TV session recorded yet.");
+  // The client log is capped, so a TV that has been off for a day or two gets pushed out of it
+  // entirely by other visitors. Absence here means "not in the recent log", not "never ran".
+  else if (!s.seen) L.push("No TV session in the recent log — the screen has not checked in lately.");
   else {
     L.push(s.minutesSinceSeen < 90
       ? `Online — last seen ${s.minutesSinceSeen} min ago.`
