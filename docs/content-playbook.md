@@ -1,10 +1,39 @@
 # Content playbook — what to make, and what to stop making
 
-Based on the last 95 Instagram posts (24 Jun – 14 Oct 2026), reach measured on the most recent 60.
+Based on the last 95 Instagram posts (24 Jun – 14 Oct 2026).
+
+---
+
+## Read this first: what this document covers, and what it misses
+
+| Last 30 days | Views | Reach |
+|---|---|---|
+| **Account total** | **707,958** | **610,744** |
+| From the 21 organic feed posts | 45,882 | 7,930 |
+| **Not from feed posts** | **662,076 (94%)** | — |
+
+**Ninety-four per cent of the account's views do not come from the posts analysed below.** No
+stories were live when this was measured, so the overwhelming likelihood is paid delivery — the
+ads running against this account.
+
+That cannot be confirmed from here. The ad account rejects the API token
+(`Ad account owner has NOT granted ads_management or ads_read permission`), which is odd, because
+the token itself reports both permissions as granted — most likely the ad account is not linked
+to this app.
+
+So read the rest of this document for what it is: **a guide to the organic 6%.** The advice in it
+is sound for that slice and the comparisons within it are fair, because every post was measured
+the same way. But it is not a picture of where the audience actually comes from, and nobody
+should re-plan a budget on it.
+
+**The highest-value thing anyone can do with this document is make it obsolete** — grant the ad
+account permission, and the next version can rank content by what the other 94% responds to, and
+by which of it produces enquiries rather than views.
 
 ---
 
 ## The one number that should change what you shoot
+*(within the organic 6% — see the note above)*
 
 | Format | Posts | Avg reach | Avg engagement |
 |---|---|---|---|
@@ -83,18 +112,23 @@ two are greeting cards.
 
 ---
 
-## Measurement — and an honest limit
+## Measurement — and two honest limits
 
-Reach and engagement are available and are what this document is built on. **Admissions data is
-not.** The ad account refuses the API token (`Ad account owner has NOT granted ads_management`),
-so there is no way from here to see which content produces enquiries.
+**First: this covers 6% of the audience.** 94% of views come from somewhere other than these
+feed posts, almost certainly the ads. See the note at the top — it is the single most important
+caveat in this document.
 
-That matters: reach is not the goal, admissions are. Everything above says what gets *seen*. If
-someone fixes the ad account permission, the next version of this can say what gets *enrolled* —
-and that might well reorder the whole list.
+**Second: admissions data is not available either.** The ad account refuses the API token
+(`Ad account owner has NOT granted ads_management or ads_read permission`), which is odd, because
+the token reports both as granted — most likely the ad account is not linked to this app. Until
+that is fixed, this ranks what gets *seen*, not what *enrols*, and fixing it could reorder the
+whole list.
+
+Both limits have the same fix: grant the ad account permission to the app. That single change
+turns this from a guide to the organic tail into a guide to the actual business.
 
 Until then, the cheap substitute: ask every enquiring parent where they heard of you, and write
-it down. Twenty answers is enough to beat any amount of reach data.
+it down. Twenty answers beats any amount of reach data.
 
 ---
 
