@@ -18,8 +18,9 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
-const PHOTO_DIR = path.join(ROOT, "data", "student-photos");
-const REVIEW_FILE = path.join(ROOT, "data", "photo-review.json");
+const SCHOOL = process.env.QLASS_SCHOOL_SLUG || "qlass-learning";   // one cache folder and review file per school
+const PHOTO_DIR = path.join(ROOT, "data", "student-photos", SCHOOL);
+const REVIEW_FILE = path.join(ROOT, "data", "photo-review", `${SCHOOL}.json`);
 const MODEL = "claude-haiku-4-5-20251001";
 
 const PROMPT = `This is a profile photo a school student uploaded of themselves. It may be shown on a

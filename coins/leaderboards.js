@@ -13,7 +13,9 @@ const { Pool } = pg;
 // Photos are cached by scripts/sync-student-photos.mjs. A board only claims a portrait when the
 // file is actually on disk, so a student with no photo falls back to initials rather than
 // leaving a broken image on the TV.
-const PHOTO_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "data", "student-photos");
+// One cache folder and one review file per school, so schools sharing this display never mix photos.
+const SCHOOL = process.env.QLASS_SCHOOL_SLUG || "qlass-learning";
+const PHOTO_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "data", "student-photos", SCHOOL);
 // Maps student id to the cached filename, since portraits arrive as either JPEG or PNG.
 //
 // Students pick their own photo, and a sweep of the first 53 found anime characters, a WhatsApp QR
@@ -21,7 +23,7 @@ const PHOTO_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", 
 // on its own fit to show. data/photo-review.json holds a verdict per student and only a cleared
 // photo is handed to a board. An unreviewed photo counts as not cleared: this screen faces a
 // public waiting room, so the default has to be initials rather than whatever was uploaded.
-const REVIEW_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "data", "photo-review.json");
+const REVIEW_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "data", "photo-review", `${SCHOOL}.json`);
 let photoMap = new Map(), photoAt = 0;
 function photoFile(id) {
   if (!id) return "";
@@ -309,7 +311,21 @@ export async function fetchBoard(key) {
   if (!p) throw new Error("QLASS_COINS_DATABASE_URL is not set");
   const params = [TEST_NAME_RE.source];
   if (spec.sql.includes("$2")) params.push(String(spec.windowDays));
-  const { rows } = await p.query(spec.sql, params);
+  // The platform DB is multi-school: the coins_compat views return nothing until the school is set, inside the same transaction.
+  const client = await p.connect();
+  let rows;
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT coins_compat.use_school($1)", [process.env.QLASS_SCHOOL_SLUG || "qlass-learning"]);
+    await client.query("SET LOCAL search_path = coins_compat, public");
+    ({ rows } = await client.query(spec.sql, params));
+    await client.query("COMMIT");
+  } catch (e) {
+    try { await client.query("ROLLBACK"); } catch {}
+    throw e;
+  } finally {
+    client.release();
+  }
   return {
     key,
     title: spec.title,
@@ -325,7 +341,7 @@ export async function fetchBoard(key) {
       name: r.name,
       cls: r.class,
       value: Number(r.value),
-      photoUrl: photoFile(r.qlass_id) ? `/student-photos/${photoFile(r.qlass_id)}` : "",
+      photoUrl: photoFile(r.qlass_id) ? `/student-photos/${SCHOOL}/${photoFile(r.qlass_id)}` : "",
     })),
   };
 }
