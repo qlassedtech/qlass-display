@@ -15,6 +15,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as gbp from "../gbp/reviews.js";
+import * as perf from "./social-performance.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -161,6 +162,9 @@ async function draftReplies(env, items) {
 function toMarkdown(d) {
   const L = [];
   L.push(`# Qlass daily digest — ${d.date}`, "");
+  // Performance leads: it is the part someone will read every morning even on a day with no
+  // comments to answer.
+  L.push(perf.toMarkdown(d.performance, d.history || []), "");
   const ig = d.instagram;
   L.push("## Instagram");
   if (!ig.available) L.push(`_Unavailable: ${ig.why}_`);
@@ -232,7 +236,14 @@ async function main() {
     }
   } catch (e) { google = { available: false, why: e.message }; }
 
-  const digest = { date: new Date().toISOString().slice(0, 10), generatedAt: new Date().toISOString(), instagram: ig, google, screen: await screen() };
+  let performance = { available: false, why: "not collected" }, history = [];
+  try {
+    performance = await perf.collect(env);
+    if (performance.available) history = await perf.remember(performance);
+  } catch (e) { performance = { available: false, why: e.message }; }
+
+  const digest = { date: new Date().toISOString().slice(0, 10), generatedAt: new Date().toISOString(),
+                   performance, history, instagram: ig, google, screen: await screen() };
   const base = path.join(OUT_DIR, digest.date);
   await fsp.writeFile(`${base}.json`, JSON.stringify(digest, null, 2));
   await fsp.writeFile(`${base}.md`, toMarkdown(digest));

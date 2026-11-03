@@ -11,6 +11,7 @@ data/media.json
 data/meta/
 data/photo-review.json
 data/settings.json
+data/social-history.json
 data/student-photos/
 data/uploads/*
 node_modules/
