@@ -4,6 +4,7 @@
 .claude/scheduled_tasks.lock
 .env
 GMB Photos and Videos/
+data/*Invoice_Summary.csv
 data/auth.json
 data/client-log.json
 data/digests/
@@ -11,6 +12,7 @@ data/media.json
 data/meta/
 data/photo-review.json
 data/settings.json
+data/social-export-*.json
 data/social-history.json
 data/student-photos/
 data/uploads/*
