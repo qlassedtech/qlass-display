@@ -133,26 +133,11 @@
 (() => {
   const app = document.getElementById("app");
   const toastEl = document.getElementById("toast");
-  // The Instagram & Ads tab needs its own password (set as META_ADMIN_PASSWORD on the server) even once
-  // signed in to the portal, so the shared upload password alone can't touch real ad spend.
-  const metaPw = () => sessionStorage.getItem("qd_meta_pw") || "";
-  const askMetaPassword = () => {
-    const p = window.prompt("Instagram & Ads password (separate from the portal password):");
-    if (p) sessionStorage.setItem("qd_meta_pw", p);
-    return p || "";
-  };
   const api = async (url, opts = {}) => {
-    const isMeta = url.startsWith("/api/meta/");
-    const headers = { ...(opts.body && !(opts.body instanceof FormData) ? { "Content-Type": "application/json" } : {}),
-      ...(isMeta && metaPw() ? { "X-Meta-Password": metaPw() } : {}) };
+    const headers = opts.body && !(opts.body instanceof FormData) ? { "Content-Type": "application/json" } : {};
     const r = await fetch(url, { headers, ...opts,
       body: opts.body && !(opts.body instanceof FormData) ? JSON.stringify(opts.body) : opts.body });
     const data = await r.json().catch(() => ({}));
-    if (r.status === 401 && isMeta) {
-      sessionStorage.removeItem("qd_meta_pw");
-      if (askMetaPassword()) return api(url, opts);
-      throw new Error("Instagram & Ads password required");
-    }
     if (r.status === 401 && !url.endsWith("/login")) { renderLogin(); throw new Error("Signed out"); }
     if (!r.ok) throw new Error(data.error || `Request failed (${r.status})`);
     return data;
@@ -206,8 +191,10 @@
       <main>
         <h2 class="title">What plays on the TV</h2>
         <p class="sub">Uploads and achiever slides loop on display.qlass.in. Changes reach the TV within ${settings.refreshInterval} seconds.</p>
-        <div class="tabs"><button data-tab="playlist">Playlist</button><button data-tab="performance">Performance</button><button data-tab="achievers">Achievers</button><button data-tab="settings">Settings</button><button data-tab="meta">Instagram &amp; Ads</button></div>
-        <section data-pane="performance">
+        <div class="tabs"><button data-tab="playlist">Playlist</button><button data-tab="achievers">Achievers</button><button data-tab="settings">Settings</button><button data-tab="meta">Social &amp; Ads</button></div>
+        
+        <section data-pane="meta">
+
           <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
             <div><strong>Daily digest</strong> <span class="muted">— social performance, comments awaiting a reply, and the TV's overnight state.</span></div>
             <div class="row" style="gap:8px">
@@ -216,8 +203,7 @@
             </div>
           </div>
           <div id="digestBody" class="digest">Loading…</div>
-        </section>
-        <section data-pane="meta">
+
         <div class="card" style="margin-bottom:16px">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
             <h3 style="margin:0;font-size:15px">Instagram daily tracking <span class="count" id="metaWhen"></span></h3>
@@ -301,7 +287,7 @@
         <div class="grid" id="grid"></div>
         </section>
       </main>`;
-    app.querySelectorAll(".tabs button").forEach((b) => b.onclick = () => { tab = b.dataset.tab; showTab(); if (tab === "achievers") loadAch(); if (tab === "meta") loadMeta(); if (tab === "performance") loadDigest(); });
+    app.querySelectorAll(".tabs button").forEach((b) => b.onclick = () => { tab = b.dataset.tab; showTab(); if (tab === "achievers") loadAch(); if (tab === "meta") { loadMeta(); loadDigest(); } });
 
     // Just enough markdown for what the digest actually emits — headings, tables, quotes, lists,
     // links, bold, and the indented reach chart. A parser library would be more code than the

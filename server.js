@@ -18,9 +18,6 @@ const PORT = Number(process.env.PORT || 3000);
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "change-me";
 const SESSION_SECRET = process.env.SESSION_SECRET || "dev-secret-change-me";
 const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB || 2048);
-// A second password gates the Instagram/ads tab (pause/resume real ad spend) separately from the
-// shared upload password, so anyone who can upload photos can't also touch the ad account.
-const META_ADMIN_PASSWORD = process.env.META_ADMIN_PASSWORD || "";
 
 const DATA_DIR = path.join(__dirname, "data");
 const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
@@ -160,15 +157,10 @@ function loginLimiter(req, res, next) {
   next();
 }
 
-// Separate gate for the Instagram/ads tab: requires its own password even once signed in to the portal.
-function requireMetaAuth(req, res, next) {
-  if (!META_ADMIN_PASSWORD) return res.status(503).json({ error: "Instagram & Ads admin password is not configured (set META_ADMIN_PASSWORD)." });
-  const supplied = Buffer.from(String(req.headers["x-meta-password"] || ""));
-  const expected = Buffer.from(META_ADMIN_PASSWORD);
-  const ok = supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected);
-  if (!ok) return res.status(401).json({ error: "Wrong Instagram & Ads password" });
-  next();
-}
+// The Instagram/ads tab used to sit behind a second password (META_ADMIN_PASSWORD) so that
+// whoever uploads photos could not also pause live ad spend. Removed on request: the portal
+// password is now the only gate on those routes, which means anyone who can upload can also
+// start and stop campaigns.
 
 // ---------- uploads ----------
 const ALLOWED = {
@@ -714,31 +706,31 @@ app.put("/api/settings", requireAuth, async (req, res) => {
 
 // --- admin: Meta (Instagram insights + ad campaigns) ---
 // Configured via META_* env vars; see meta/README.md. Everything here is read-only except pause.
-app.get("/api/meta/report", requireAuth, requireMetaAuth, async (req, res, next) => {
+app.get("/api/meta/report", requireAuth, async (req, res, next) => {
   try {
     const r = await metaSnapshot.report(Math.min(Math.max(Number(req.query.days) || 7, 1), 90));
     res.json({ configured: metaGraph.isConfigured(), ...r });
   } catch (e) { next(e); }
 });
-app.post("/api/meta/snapshot", requireAuth, requireMetaAuth, async (_req, res) => {
+app.post("/api/meta/snapshot", requireAuth, async (_req, res) => {
   try { const s = await metaSnapshot.take(); res.json({ ok: true, date: s.date, media: s.media.length, errors: s.errors }); }
   catch (e) { res.status(502).json({ error: e.message }); }
 });
-app.get("/api/meta/daily", requireAuth, requireMetaAuth, async (req, res, next) => {
+app.get("/api/meta/daily", requireAuth, async (req, res, next) => {
   try {
     const r = await metaSnapshot.dailyBreakdown(Math.min(Math.max(Number(req.query.days) || 7, 1), 30));
     res.json({ configured: metaGraph.isConfigured(), ...r });
   } catch (e) { next(e); }
 });
-app.get("/api/meta/ads", requireAuth, requireMetaAuth, async (_req, res) => {
+app.get("/api/meta/ads", requireAuth, async (_req, res) => {
   if (!metaGraph.isConfigured()) return res.json({ configured: false });
   try { res.json({ configured: true, ...(await metaAds.status()) }); }
   catch (e) { res.status(502).json({ error: e.message, code: e.code }); }
 });
-app.post("/api/meta/ads/pause-all", requireAuth, requireMetaAuth, async (_req, res) => {
+app.post("/api/meta/ads/pause-all", requireAuth, async (_req, res) => {
   try { res.json(await metaAds.pauseAll()); } catch (e) { res.status(502).json({ error: e.message }); }
 });
-app.post("/api/meta/ads/:id/:action", requireAuth, requireMetaAuth, async (req, res) => {
+app.post("/api/meta/ads/:id/:action", requireAuth, async (req, res) => {
   if (!/^\d+$/.test(req.params.id) || !["pause", "resume"].includes(req.params.action)) return res.status(400).json({ error: "bad request" });
   try { res.json(await metaAds.setStatus(req.params.id, req.params.action === "pause" ? "PAUSED" : "ACTIVE")); }
   catch (e) { res.status(502).json({ error: e.message }); }
