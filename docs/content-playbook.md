@@ -4,36 +4,38 @@ Based on the last 95 Instagram posts (24 Jun – 14 Oct 2026).
 
 ---
 
-## Read this first: what this document covers, and what it misses
+## Read this first — the ads have stopped, so this is now the whole strategy
 
-| Last 30 days | Views | Reach |
-|---|---|---|
-| **Account total** | **707,958** | **610,744** |
-| From the 21 organic feed posts | 45,882 | 7,930 |
-| **Not from feed posts** | **662,076 (94%)** | — |
+Updated 3 Nov 2026. The earlier version of this note said the document covered only 6% of the
+audience, because paid delivery dwarfed everything else. **That is no longer true: the ads have
+stopped.** Organic is now all there is, which makes everything below the plan rather than a
+footnote to it.
 
-**Ninety-four per cent of the account's views do not come from the posts analysed below.** No
-stories were live when this was measured, so the overwhelming likelihood is paid delivery — the
-ads running against this account.
+| Views | Sep 4 – Oct 4 | Oct 4 – Nov 3 | Change |
+|---|---|---|---|
+| **Paid** | 403,909 | 294,779 | **→ now zero** |
+| **Organic** | 19,506 | **35,641** | **+83%** |
+| Total | 423,415 | 330,420 | −22% |
 
-That cannot be confirmed from here. The ad account rejects the API token
-(`Ad account owner has NOT granted ads_management or ads_read permission`), which is odd, because
-the token itself reports both permissions as granted — most likely the ad account is not linked
-to this app.
+Two things follow, and they pull in opposite directions.
 
-So read the rest of this document for what it is: **a guide to the organic 6%.** The advice in it
-is sound for that slice and the comparisons within it are fair, because every post was measured
-the same way. But it is not a picture of where the audience actually comes from, and nobody
-should re-plan a budget on it.
+**The good news, and it is real: organic nearly doubled.** 19,506 → 35,641 views with no money
+behind it. The content direction in this document is working, and it was working while the paid
+numbers were masking it.
 
-**The highest-value thing anyone can do with this document is make it obsolete** — grant the ad
-account permission, and the next version can rank content by what the other 94% responds to, and
-by which of it produces enquiries rather than views.
+**The hard number: paid was 89% of views last month.** With it switched off, expect roughly
+**35,000 views a month instead of 330,000** — about a tenth. Reach has already fallen to double
+digits on several days (265 → 89 → 36 → 28 → 81 → 79 → 198 over the last week).
+
+**Reels are carrying the entire organic result:** 29,252 of 35,641 organic views, 82%. That makes
+the format finding below the single most actionable line here.
+
+Nothing in this document can replace paid reach at that scale. What it can do is make sure the
+organic tenth is as strong as possible, and that it keeps compounding — which it demonstrably is.
 
 ---
 
 ## The one number that should change what you shoot
-*(within the organic 6% — see the note above)*
 
 | Format | Posts | Avg reach | Avg engagement |
 |---|---|---|---|
@@ -112,23 +114,23 @@ two are greeting cards.
 
 ---
 
-## Measurement — and two honest limits
+## Measurement — and one honest limit
 
-**First: this covers 6% of the audience.** 94% of views come from somewhere other than these
-feed posts, almost certainly the ads. See the note at the top — it is the single most important
-caveat in this document.
+With the ads off, this document now covers the whole of the account's reach, so the earlier
+caveat about it being a 6% slice no longer applies.
 
-**Second: admissions data is not available either.** The ad account refuses the API token
-(`Ad account owner has NOT granted ads_management or ads_read permission`), which is odd, because
-the token reports both as granted — most likely the ad account is not linked to this app. Until
-that is fixed, this ranks what gets *seen*, not what *enrols*, and fixing it could reorder the
-whole list.
+**What is still missing is admissions.** Everything here ranks what gets *seen*, not what
+*enrols*. Those are not the same thing, and a reel that reaches 1,500 people is worth less than a
+post that brings two parents through the door.
 
-Both limits have the same fix: grant the ad account permission to the app. That single change
-turns this from a guide to the organic tail into a guide to the actual business.
+There is no way to measure that from here: the ad account `4362790727384695` that carried the
+paid reach has been removed from the business portfolio, so even its historical cost-per-result
+is out of reach. Checked 3 Nov 2026 — the account is absent from Business Settings and from the
+API, and no token generated in this business will reach it.
 
-Until then, the cheap substitute: ask every enquiring parent where they heard of you, and write
-it down. Twenty answers beats any amount of reach data.
+The cheap substitute costs nothing: **ask every enquiring parent where they heard of you, and
+write it down.** Twenty answers beats any amount of reach data, and it is the only number in this
+whole document that is actually about admissions.
 
 ---
 
