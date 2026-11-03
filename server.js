@@ -430,6 +430,27 @@ app.post("/api/logout", (_req, res) => {
 app.get("/api/me", (req, res) => res.json({ signedIn: verifyToken(parseCookies(req).qd_session) }));
 // Invalidates every other signed-in session (e.g. if the shared password was exposed) by bumping the epoch,
 // then re-signs the caller in on the new epoch so they aren't locked out by their own click.
+// The digest is written to disk by the nightly job. Without this the only way to read it was to
+// SSH into the box, which meant nobody read it.
+app.get("/api/digests", requireAuth, async (_req, res) => {
+  try {
+    const dir = path.join(DATA_DIR, "digests");
+    const days = (await fsp.readdir(dir)).filter((f) => f.endsWith(".md")).map((f) => f.replace(/\.md$/, "")).sort().reverse();
+    res.json({ days: days.slice(0, 30) });
+  } catch { res.json({ days: [] }); }
+});
+
+app.get("/api/digests/:day", requireAuth, async (req, res) => {
+  // The day is pasted straight into a path, so keep it to the shape a date actually has.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.day)) return res.status(400).json({ error: "Bad date" });
+  try {
+    const md = await fsp.readFile(path.join(DATA_DIR, "digests", `${req.params.day}.md`), "utf8");
+    let history = [];
+    try { history = JSON.parse(await fsp.readFile(path.join(DATA_DIR, "social-history.json"), "utf8")); } catch {}
+    res.json({ day: req.params.day, markdown: md, history: history.slice(-30) });
+  } catch { res.status(404).json({ error: "No digest for that day" }); }
+});
+
 // Pull a digest on demand rather than waiting for the morning run.
 app.post("/api/jobs/digest", requireAuth, (_req, res) => {
   runJob(DAILY_JOBS[0]);

@@ -18,6 +18,49 @@
   h2.title { font-family:'DM Serif Display',serif; font-weight:400; font-size:34px; margin:0 0 4px; }
   .sub { color:var(--muted); margin:0 0 20px; }
   .tabs { display:inline-flex; background:#E6E8F4; border-radius:12px; padding:4px; gap:4px; margin-bottom:20px; }
+  /* The digest arrives as markdown from the nightly job; this renders it without pulling in a
+     library for five tags. Tables scroll rather than squeeze, so the surface breakdown stays
+     readable on a phone. */
+  .digest { background:#fff; border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-top:14px; line-height:1.55; overflow-x:auto; }
+  .digest h1 { font-size:22px; margin:0 0 12px; }
+  .digest h2 { font-size:17px; margin:22px 0 8px; padding-top:14px; border-top:1px solid var(--line); }
+  .digest h2:first-of-type { border-top:0; padding-top:0; margin-top:4px; }
+  .digest table { border-collapse:collapse; margin:10px 0; width:auto; }
+  .digest th, .digest td { border:1px solid var(--line); padding:5px 12px; text-align:left; font-size:14px; }
+  .digest th { background:#F3F4FB; }
+  .digest blockquote { margin:12px 0; padding:10px 14px; background:#FFF6E5; border-left:4px solid #E0A33C; border-radius:0 8px 8px 0; }
+  .digest pre { background:#F6F7FC; padding:12px; border-radius:10px; overflow-x:auto; font-size:12.5px; line-height:1.45; }
+  .digest a { color:var(--brand); word-break:break-all; }
+  .digest ul { margin:8px 0 8px 20px; }
+  .digest code { background:#F3F4FB; padding:1px 5px; border-radius:5px; font-size:13px; }
+
+  /* Phones. The portal had no breakpoints at all, and the tab strip alone measured 414px against
+     a 390px viewport, so the last tab sat off-screen on most handsets. Everything here is about
+     letting rows wrap and letting the one genuinely wide thing — the tab strip — scroll. */
+  @media (max-width: 760px) {
+    body { font-size:15px; }
+    main, header > div { padding-left:14px; padding-right:14px; }
+    header { flex-wrap:wrap; gap:8px; }
+    header .row, header > div { flex-wrap:wrap; }
+    h1 { font-size:26px; }
+    .tabs {
+      display:flex; width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch;
+      scrollbar-width:none; border-radius:10px;
+    }
+    .tabs::-webkit-scrollbar { display:none; }
+    .tabs button { white-space:nowrap; flex:0 0 auto; padding:8px 12px; font-size:14px; }
+    .row { flex-wrap:wrap; gap:8px; }
+    .grid { grid-template-columns:1fr 1fr; }
+    input, select, textarea, button { font-size:16px; }   /* stops iOS zooming the page on focus */
+    .digest { padding:14px; border-radius:12px; }
+    .digest h1 { font-size:19px; }
+    .digest h2 { font-size:16px; }
+    .digest pre { font-size:11px; }
+    #digestDay { max-width:150px; }
+  }
+  @media (max-width: 430px) {
+    .grid { grid-template-columns:1fr; }
+  }
   .tabs button { background:transparent; color:var(--muted); font-weight:700; border-radius:9px; }
   .tabs button.on { background:#fff; color:var(--text); box-shadow:0 1px 3px rgba(13,11,110,.15); }
   .ach-row { display:flex; align-items:center; gap:14px; padding:12px 4px; border-top:1px solid #EEF0F7; }
@@ -163,7 +206,17 @@
       <main>
         <h2 class="title">What plays on the TV</h2>
         <p class="sub">Uploads and achiever slides loop on display.qlass.in. Changes reach the TV within ${settings.refreshInterval} seconds.</p>
-        <div class="tabs"><button data-tab="playlist">Playlist</button><button data-tab="achievers">Achievers</button><button data-tab="settings">Settings</button><button data-tab="meta">Instagram &amp; Ads</button></div>
+        <div class="tabs"><button data-tab="playlist">Playlist</button><button data-tab="performance">Performance</button><button data-tab="achievers">Achievers</button><button data-tab="settings">Settings</button><button data-tab="meta">Instagram &amp; Ads</button></div>
+        <section data-pane="performance">
+          <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+            <div><strong>Daily digest</strong> <span class="muted">— social performance, comments awaiting a reply, and the TV's overnight state.</span></div>
+            <div class="row" style="gap:8px">
+              <select id="digestDay"></select>
+              <button id="digestRun" class="ghost">Run now</button>
+            </div>
+          </div>
+          <div id="digestBody" class="digest">Loading…</div>
+        </section>
         <section data-pane="meta">
         <div class="card" style="margin-bottom:16px">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
@@ -248,7 +301,91 @@
         <div class="grid" id="grid"></div>
         </section>
       </main>`;
-    app.querySelectorAll(".tabs button").forEach((b) => b.onclick = () => { tab = b.dataset.tab; showTab(); if (tab === "achievers") loadAch(); if (tab === "meta") loadMeta(); });
+    app.querySelectorAll(".tabs button").forEach((b) => b.onclick = () => { tab = b.dataset.tab; showTab(); if (tab === "achievers") loadAch(); if (tab === "meta") loadMeta(); if (tab === "performance") loadDigest(); });
+
+    // Just enough markdown for what the digest actually emits — headings, tables, quotes, lists,
+    // links, bold, and the indented reach chart. A parser library would be more code than the
+    // digest it renders.
+    function mdToHtml(md) {
+      const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const inline = (s) => esc(s)
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+        .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>')
+        .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+        .replace(/`([^`]+)`/g, "<code>$1</code>");
+      const out = []; const lines = md.split("\n");
+      let i = 0, list = null, quote = null, pre = null;
+      const closeAll = () => {
+        if (list) { out.push("</ul>"); list = null; }
+        if (quote) { out.push("</blockquote>"); quote = null; }
+        if (pre) { out.push("</pre>"); pre = null; }
+      };
+      while (i < lines.length) {
+        const L = lines[i];
+        if (/^\s{4,}\S/.test(L)) {                        // the indented reach chart
+          if (!pre) { closeAll(); out.push("<pre>"); pre = 1; }
+          out.push(esc(L.replace(/^\s{4}/, ""))); i++; continue;
+        }
+        if (pre) { out.push("</pre>"); pre = null; }
+        if (/^\|/.test(L) && /^\|[\s:|-]+\|$/.test(lines[i + 1] || "")) {
+          closeAll();
+          const cells = (r) => r.split("|").slice(1, -1).map((c) => c.trim());
+          out.push("<table><thead><tr>" + cells(L).map((c) => `<th>${inline(c)}</th>`).join("") + "</tr></thead><tbody>");
+          i += 2;
+          while (i < lines.length && /^\|/.test(lines[i])) {
+            out.push("<tr>" + cells(lines[i]).map((c) => `<td>${inline(c)}</td>`).join("") + "</tr>"); i++;
+          }
+          out.push("</tbody></table>"); continue;
+        }
+        const h = L.match(/^(#{1,3})\s+(.*)$/);
+        if (h) { closeAll(); out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`); i++; continue; }
+        if (/^>\s?/.test(L)) {
+          if (!quote) { closeAll(); out.push("<blockquote>"); quote = 1; }
+          out.push(inline(L.replace(/^>\s?/, "")) + " "); i++; continue;
+        }
+        if (quote) { out.push("</blockquote>"); quote = null; }
+        if (/^[-*]\s+/.test(L) || /^\d+\.\s+/.test(L)) {
+          if (!list) { out.push("<ul>"); list = 1; }
+          out.push("<li>" + inline(L.replace(/^([-*]|\d+\.)\s+/, "")) + "</li>"); i++; continue;
+        }
+        if (list) { out.push("</ul>"); list = null; }
+        if (/^---+$/.test(L.trim())) { out.push("<hr>"); i++; continue; }
+        if (L.trim()) out.push("<p>" + inline(L) + "</p>");
+        i++;
+      }
+      closeAll();
+      return out.join("\n");
+    }
+
+    async function showDigest(day) {
+      const body = document.getElementById("digestBody");
+      try { body.innerHTML = mdToHtml((await api(`/api/digests/${day}`)).markdown); }
+      catch (e) { body.textContent = e.message; }
+    }
+
+    async function loadDigest() {
+      const sel = document.getElementById("digestDay"), body = document.getElementById("digestBody");
+      try {
+        const { days } = await api("/api/digests");
+        if (!days.length) {
+          body.innerHTML = "<p class='muted'>No digest yet. It runs at 07:00, or press <strong>Run now</strong>.</p>";
+          sel.innerHTML = ""; return;
+        }
+        sel.innerHTML = days.map((d) => `<option value="${d}">${d}</option>`).join("");
+        sel.onchange = () => showDigest(sel.value);
+        showDigest(days[0]);
+      } catch (e) { body.textContent = e.message; }
+    }
+
+    document.getElementById("digestRun").onclick = async (e) => {
+      const btn = e.target;
+      btn.disabled = true; btn.textContent = "Running…";
+      try {
+        await api("/api/jobs/digest", { method: "POST", body: {} });
+        // The job is spawned, not awaited, so give it a moment before reloading the list.
+        setTimeout(() => { loadDigest(); btn.disabled = false; btn.textContent = "Run now"; }, 12000);
+      } catch (err) { toast(err.message, true); btn.disabled = false; btn.textContent = "Run now"; }
+    };
     document.getElementById("saveAch").onclick = saveAch;
     document.getElementById("metaDays").onchange = loadMeta;
     document.getElementById("metaSnap").onclick = async (e) => {
